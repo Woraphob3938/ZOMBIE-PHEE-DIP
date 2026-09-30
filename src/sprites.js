@@ -174,11 +174,11 @@ const Pix = (() => {
         ['.....hhh.....', '....hssss....', '....srsrs....', '....smmms....', '..ccccccccc..', 'scccccsccccc.', 'ssccsssssccc.', '.cccsssssccc.', '.ccccsssccc..', '..ppppppppp..', '.ppp.....ppp.', '.kkk.....kkk.'],
       ],
     },
-    // preta (hungry ghost): tall, gaunt, swollen belly, needle mouth — 11x14, feet anchor col 5
+    // preta (hungry ghost): towering and skeletal — tiny head, needle mouth, long neck, arms down to the knees — 7x22, feet col 3
     preta: {
       walk: [
-        ['....hhh....', '...hsssh...', '...srsrs...', '....sms....', '.....s.....', '.s.sdsds.s.', 's..sssss..s', 's.sssssss.s', '.sssssssss.', '..sssssss..', '...ppppp...', '....s.s....', '....s.s....', '...ss.ss...'],
-        ['....hhh....', '...hsssh...', '...srsrs...', '....sms....', '.....s.....', 's..sdsds..s', '.s.sssss.s.', '.s.sssss.s.', '.sssssssss.', '..sssssss..', '...ppppp...', '....s.s....', '...s...s...', '..ss...ss..'],
+        ['..hhh..', '.hsssh.', '.hrsrh.', '..sms..', '...s...', '...s...', '...s...', '.sssss.', 's.sds.s', 's.sss.s', 's.sds.s', 's..s..s', 's..s..s', 's.ppp.s', 's.p.p.s', 'd.s.s.d', '..s.s..', '..s.s..', '..s.s..', '..s.s..', '..s.s..', '.ss.ss.'],
+        ['..hhh..', '.hsssh.', '.hrsrh.', '..sms..', '...s...', '...s...', '...s...', '.sssss.', 's.sds.s', 's.sss.s', 's.sds.s', '.s.s.s.', '.s.s.s.', '.sppps.', '.dp.pd.', '..s.s..', '..s..s.', '.s...s.', '.s...s.', '.s...s.', '.s...s.', 'ss...ss'],
       ],
     },
     zombie: {
@@ -195,7 +195,7 @@ const Pix = (() => {
     },
   };
 
-  const AX = { brute: 5, guard: 5, bigzombie: 6, boss: 6, tank: 6, bomber: 5, dog: 4, zdog: 4, preta: 5 };
+  const AX = { brute: 5, guard: 5, bigzombie: 6, boss: 6, tank: 6, bomber: 5, dog: 4, zdog: 4, preta: 3 };
   const QUAD = { dog: 1, zdog: 1 }; // four-legged: lie on their back instead of rotating
 
   function paint(rows, colors) {
@@ -284,7 +284,7 @@ const Pix = (() => {
     flood: { pal: { b: '#3a8ad0', w: '#bfe4ff' }, rows: ['........', '..ww....', '.wbbw..w', 'wbbbbwwb', 'bbbbbbbb', 'bwbbbwbb', 'bbbbbbbb', '........'] },
     clear: { pal: { y: '#ffd23a', w: '#e8eef4' }, rows: ['..yy....', '.yyyy...', '.yyww...', '..wwwww.', '.wwwwwww', '.wwwwwww', '........', '........'] },
     tank: { pal: { s: '#6d9150', c: '#5c3a3a', r: '#ff3a3a' }, rows: ['..ssss..', '..rssr..', '.cccccc.', 'ccsssscc', 'ccsssscc', '.cssssc.', '.cc..cc.', '.cc..cc.'] },
-    preta: { pal: { h: '#d8e8ff', s: '#93a8c0', d: '#40506a', r: '#ff3a3a', p: '#5a5a6a' }, rows: ['..hhh...', '..srs...', '...s....', '.sddds..', 's.sss.s.', '.ssss...', '..pp....', '..s.s...'] },
+    preta: { pal: { h: '#d8e8ff', s: '#93a8c0', d: '#40506a', r: '#ff3a3a', p: '#5a5a6a' }, rows: ['...h....', '..srs...', '...s....', '..sss...', '.s.d.s..', '.s.p.s..', '..s.s...', '..s.s...'] },
     note: { pal: { w: '#e8e0f0' }, rows: ['...wwwww', '...w...w', '...w...w', '...w...w', '.www.www', 'wwww.www', 'www.....', '........'] },
     crown: { pal: { y: '#f0c830', Y: '#b08a18', r: '#e03030' }, rows: ['........', 'y..y..y.', 'yy.yy.yy', 'yyyyyyyy', 'yryyyryy', 'yyyyyyyy', 'YYYYYYYY', '........'] },
     house: { pal: { r: '#c0503a', R: '#8a3222', w: '#e0d0b0', d: '#5a3a22', y: '#f7e07a' }, rows: ['...rr...', '..rRRr..', '.rRRRRr.', 'rRRRRRRr', '.wwwwww.', '.wywdww.', '.wwwdww.', '.wwwdww.'] },

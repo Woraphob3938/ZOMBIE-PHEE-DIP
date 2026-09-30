@@ -145,12 +145,12 @@ function strainMul(s) {
     case 'spit': return { hp: 0.7 * (1 + 0.2 * l), dmg: 1.0 * (1 + 0.2 * l), spd: 1 };
     case 'bomb': return { hp: 0.6, dmg: 4 * (1 + 0.25 * l), spd: 1.25 };
     case 'tank': return { hp: 4 * (1 + 0.25 * l), dmg: 0.8, spd: 0.7 };
-    case 'preta': return { hp: 8 * (1 + 0.25 * l), dmg: 1.5 * (1 + 0.2 * l), spd: 0.8 };
+    case 'preta': return { hp: 5 * (1 + 0.2 * l), dmg: 1 * (1 + 0.15 * l), spd: 0.75 };
     case 'dog': return { hp: 0.6, dmg: 0.7, spd: 1.7 }; // risen from a dead dog: fast and fragile
     default: return { hp: 1, dmg: 1, spd: 1 };
   }
 }
-const pretaR = (l) => Math.min(38, 20 + 1.2 * l); // aura radius
+const pretaR = (l) => Math.min(30, 16 + 0.8 * l); // aura radius
 const strainUnlocked = (s) => s === 'basic' || U(s) > 0;
 const strainCost = (s) => F.zCost() * STRAINS[s].cost;
 // level scaling. Past the knee (L25) humans toughen faster than the rewards grow, so a maxed-out
@@ -244,16 +244,19 @@ const routeMul = (cur) => (G && G.route ? (G.route[cur] || 1) * (G.route.all || 
 
 // ---------- random events mid-level --------------------------------------------
 const EVENTS = {
-  festival: { name: 'เทศกาลลอยกระทง', icon: 'lantern', desc: 'พลุแตกกลางเมือง! ฝูงชนแห่มาดู ทุกคนในงานให้เลือด x2', dur: 25 },
-  bloodmoon: { name: 'จันทร์สีเลือด', icon: 'moon', desc: 'ทุกการฆ่าได้เลือด x3 · ซอมบี้กัดแรงขึ้น 35% และดูดเลือดฟื้นพลังจากการกัด', dur: 28 },
-  concert: { name: 'คอนเสิร์ตหมอลำซิ่ง', icon: 'note', desc: 'ฝูงชนมหาศาลมาเต้นกลางลาน ไม่สนซอมบี้จนกว่าจะโดนกัด · คนละ 2 เท่า — บุฟเฟต์!', dur: 30 },
-  blackout: { name: 'ไฟดับทั้งเมือง', icon: 'bulb', desc: 'มนุษย์มองเห็นแค่ระยะใกล้ ยิงพลาดเกินครึ่ง ซอมบี้เน่าช้าลง', dur: 25 },
+  festival: { name: 'เทศกาลลอยกระทง', icon: 'lantern', desc: 'พลุแตกกลางเมือง! ฝูงชนแห่มาดู ทุกคนในงานให้เลือด x2', dur: 40, opening: true },
+  bloodmoon: { name: 'จันทร์สีเลือด', icon: 'moon', desc: 'ทุกการฆ่าได้เลือด x3 · ซอมบี้กัดแรงขึ้น 35% และดูดเลือดฟื้นพลังจากการกัด', dur: 28, night: true },
+  concert: { name: 'คอนเสิร์ตหมอลำซิ่ง', icon: 'note', desc: 'ฝูงชนมหาศาลมาเต้นกลางลาน ไม่สนซอมบี้จนกว่าจะโดนกัด · คนละ 2 เท่า — บุฟเฟต์!', dur: 45, opening: true },
+  blackout: { name: 'ไฟดับทั้งเมือง', icon: 'bulb', desc: 'มนุษย์มองเห็นแค่ระยะใกล้ ยิงพลาดเกินครึ่ง ซอมบี้เน่าช้าลง', dur: 25, night: true },
   army: { name: 'ด่านตรวจทหาร', icon: 'helmet', desc: 'รถทหาร 2 คันนำกำลังเสริมมา · ทหารชุดนี้ให้รางวัล x3', dur: 8, from: 8 },
   airdrop: { name: 'เสบียงตกจากฟ้า', icon: 'crate', desc: 'ชิงกล่องก่อนคนถือปืน! ได้สมอง + กระดูกก้อนใหญ่ + พลังงานเต็ม + ซอมบี้ฟรี', dur: 30 },
   horde: { name: 'ฝูงศพตื่นจากสุสาน', icon: 'skull', desc: 'ดินสั่นสะเทือน! ซอมบี้ฟรีผุดขึ้นมารอบเมืองเป็นกองทัพ', dur: 5, from: 4 },
   outbreak: { name: 'ไข้หวัดระบาด', icon: 'plague', desc: 'มนุษย์เกือบทั้งเมืองป่วย เดินช้าลง 40% หนีไม่ทัน', dur: 30, from: 5 },
 };
 const evOn = (k) => !!(G && G.ev && G.ev.k === k);
+// opening events (festival, concert) are staged from the very start of a level instead of popping up mid-way;
+// night events (blackout, blood moon) only make sense after dark, i.e. on night districts
+const evOK = (k) => G.L >= (EVENTS[k].from || 3) && !EVENTS[k].opening && (!EVENTS[k].night || MAP.th.night);
 
 // ---------- upgrades -------------------------------------------------------
 const UPG = [
@@ -286,8 +289,8 @@ const UPG = [
     show: (l) => (l ? `แรงระเบิด ${fmt(F.zDmg() * 4 * (1 + 0.25 * (l - 1)))}` : 'ยังไม่ปลดล็อก') },
   { id: 'tank', tab: 'strains', cur: 'bones', icon: 'tank', name: 'ซอมบี้ถังเลือด', desc: 'อ้วนเลือดหนา เดินช้า คนถือปืนจะหันมายิงตัวนี้ก่อน (ล่อเป้า) · ใช้พลังงาน x2.5', base: 40, g: 1.7, max: 25,
     show: (l) => (l ? `HP ${fmt(F.zHp() * 4 * (1 + 0.25 * (l - 1)))}` : 'ยังไม่ปลดล็อก') },
-  { id: 'preta', tab: 'strains', cur: 'bones', icon: 'preta', name: 'ผีเปรต', desc: 'วิญญาณหิวโหยตัวเดียวในสนาม · ลอยทะลุกำแพง รั้ว และบ้าน · ออร่าดูดชีวิตมนุษย์รอบตัวมาเติมเลือดตัวเอง คนที่ตายกลายเป็นซอมบี้ · ทุก 14 วิร้องโหยหวนให้คนรอบข้างช็อกค้าง · กระสุนเจ็บแค่ครึ่งเดียว · ไม่เน่า · ตายแล้วเรียกใหม่ได้หลัง 30 วิ · ใช้พลังงาน x6', base: 300, g: 1.7, max: 25,
-    show: (l) => (l ? `HP ${fmt(F.zHp() * 8 * (1 + 0.25 * (l - 1)))} · ออร่า ${Math.round(pretaR(l - 1))}` : 'ยังไม่ปลดล็อก') },
+  { id: 'preta', tab: 'strains', cur: 'bones', icon: 'preta', name: 'ผีเปรต', desc: 'วิญญาณหิวโหยตัวเดียวในสนาม · ลอยทะลุกำแพง รั้ว และบ้าน · ออร่าดูดชีวิตมนุษย์รอบตัวมาเติมเลือดตัวเอง คนที่ตายกลายเป็นซอมบี้ · ทุก 20 วิร้องโหยหวนให้คนรอบข้างช็อกค้างชั่วครู่ · ทนกระสุนขึ้น 30% · ไม่เน่า · ตายแล้วเรียกใหม่ได้หลัง 45 วิ · ใช้พลังงาน x6', base: 300, g: 1.7, max: 25,
+    show: (l) => (l ? `HP ${fmt(F.zHp() * 5 * (1 + 0.2 * (l - 1)))} · ออร่า ${Math.round(pretaR(l - 1))}` : 'ยังไม่ปลดล็อก') },
 ];
 // permanent upgrades bought with soul essence (kept through prestige)
 const PUP = [
@@ -581,7 +584,8 @@ function genMap(L, RT = ROUTES.normal) {
 
   // mansions: a whole block becomes a walled estate (from level 3)
   const nMansion = L >= 3 ? (ws.k >= 1.5 ? 2 : 1) + (RT.mansions || 0) : 0;
-  const mCands = blocks.filter((bk) => bk.w >= 70 && botPad(bk) - topPad(bk) >= 42);
+  // never on the bottom row: the gate faces down, and an estate hugging the map edge left no room to walk in or out
+  const mCands = blocks.filter((bk) => !bk.edgeB && bk.w >= 70 && botPad(bk) - topPad(bk) >= 42);
   for (let i = 0; i < nMansion && mCands.length; i++) {
     const bk = mCands.splice(Math.floor(r() * mCands.length), 1)[0];
     const mw = Math.min(RI(58, 70), bk.w - 14), mh = Math.min(RI(38, 46), botPad(bk) - topPad(bk) - 12);
@@ -1138,6 +1142,7 @@ function newLevel(L) {
     shake: 0, boss: null, stuckT: 1, route: R, ev: null, evT: rand(22, 38), evN: 0, fw: [], choices: null,
     weather: R.weather || rollWeather(L), cur: { x: 0, y: 0 }, curA: Math.random() * 6.28, sky: [], thunderT: rand(8, 16), flashT: 0,
     train: null, trainT: rand(3, 10), pretaCd: 0,
+    openEv: L >= 3 && Math.random() < 0.35 ? pick(Object.keys(EVENTS).filter((k) => EVENTS[k].opening && L >= (EVENTS[k].from || 3))) : null,
   };
   // specials are sized from the base population; a district's crowd modifier only adds / removes civilians
   const n0 = LV.count(L), n = Math.min(420, Math.round(n0 * (R.count || 1)));
@@ -1177,7 +1182,7 @@ function newLevel(L) {
   hideBanner();
   UI.levelDirty = true; UI.evDirty = true;
   const sz = worldSize(L), wx = WEATHER[G.weather];
-  toast(`ด่าน ${L} · ${MAP.th.name}` + (R !== ROUTES.normal ? ` · ${R.name}` : '') + (sz.k > 1 ? ` · แมพ x${sz.k}` : '') + (G.weather !== 'clear' ? ` · ${wx.name}: ${wx.desc}` : ''));
+  toast(`ด่าน ${L} · ${MAP.th.name}` + (R !== ROUTES.normal ? ` · ${R.name}` : '') + (sz.k > 1 ? ` · แมพ x${sz.k}` : '') + (G.weather !== 'clear' ? ` · ${wx.name}: ${wx.desc}` : '') + (G.openEv ? ` · ${EVENTS[G.openEv].name}!` : ''));
   if (isBossLevel(L)) spawnBoss(pick(Object.keys(BOSSES)));
 }
 // full-map overlay with every building cut out (floodwater / frost stay outdoors)
@@ -1233,7 +1238,7 @@ function makeZombie(x, y, fromPal, kind, strain = 'basic') {
     fromPal = { c: pick(['#6a7a5a', '#7a7a62', '#5a6a52']), b: pick(['#8a9a72', '#9aa080']), s: pick(ZSKIN), h: '#5a6a52', p: '#5a6a52' };
   }
   const ghost = strain === 'preta';
-  if (ghost) fromPal = { h: '#d8e8ff', s: '#93a8c0', c: '#93a8c0', b: '#93a8c0', p: '#4a5468' };
+  if (ghost) fromPal = { h: '#d8e8ff', s: '#93a8c0', c: '#93a8c0', b: '#93a8c0', p: '#4a5468', d: '#5a6a84' };
   const pal = ghost ? fromPal : fromPal ? Object.assign({}, fromPal, { s: pick(ZSKIN) }) : zombiePal();
   const big = isMelee(kind);
   const kindMul = big ? 4 : kind === 'soldier' ? 1.6 : kind === 'swat' ? 1.5 : kind === 'police' ? 1.3 : 1;
@@ -1244,7 +1249,7 @@ function makeZombie(x, y, fromPal, kind, strain = 'basic') {
   const sprite = big ? 'bigzombie' : strain === 'dog' ? 'zdog' : STRAINS[strain].sprite;
   return {
     t: 'u', kind: 'zombie', strain, big, x, y, hp, maxHp: hp, kindMul, hpMul, spdMul, dmgMul, dmg: F.zDmg() * dmgMul, spd: F.zSpd() * spdMul,
-    rad: big ? 5 : ghost ? 3.6 : strain === 'tank' ? 4.5 : strain === 'dog' ? 2.6 : 3.2, reach: big ? 7 : strain === 'tank' ? 6 : 5, immune: ghost, howlT: 6,
+    rad: big ? 5 : ghost ? 3 : strain === 'tank' ? 4.5 : strain === 'dog' ? 2.6 : 3.2, reach: big ? 7 : strain === 'tank' ? 6 : 5, immune: ghost, howlT: 10,
     pal, spr: Pix.get(sprite, pal), dir: Math.random() < 0.5 ? 1 : -1, anim: 0, pose: 'walk', target: null, think: 0, cd: 0, space: spaceOf(x, y),
     detourT: 0, ddx: 0, ddy: 0, rise: big ? 0.7 : 0.5, riseMax: big ? 0.7 : 0.5, flash: 0, wt: 0, tx: x, ty: y, idle: 0, pitch: big ? rand(0.55, 0.7) : rand(0.8, 1.2),
   };
@@ -1392,13 +1397,69 @@ function unwedge(e, nudge) {
 }
 
 // ---------- movement -------------------------------------------------------
-function tryMove(e, dx, dy) {
+// stay = never cross into another space (in/out of a house) except through a doorway waypoint;
+// without it someone standing in a door gap with a goal behind the house kept walking back inside
+function tryMove(e, dx, dy, stay) {
+  const ok = (x, y) => !blocked(x, y) && (!stay || spaceOf(x, y) === e.space);
   const nx = e.x + dx;
-  if (!blocked(nx, e.y)) e.x = nx;
+  if (ok(nx, e.y)) e.x = nx;
   const ny = e.y + dy;
-  if (!blocked(e.x, ny)) e.y = ny;
+  if (ok(e.x, ny)) e.y = ny;
+}
+// solid thing (wall run or building) in the way of a step, never the house the walker is inside
+function obstacleAt(e, x, y) {
+  const cell = cellAt(x, y);
+  if (!cell) return null;
+  for (const b of cell) {
+    if (b === e.space) continue;
+    if (x > b.x - 1.5 && x < b.x + b.w + 1.5 && y > b.y - 1.5 && y < b.y + b.h + 1.5) return b;
+  }
+  return null;
+}
+// bumped into a wall or building: walk along it to whichever end gets us closer to the goal, then past it
+function planAround(e, o, tx, ty, horiz, spd, skipSide) {
+  const m = o.wall ? 4 : 5;
+  let x = e.x, y = e.y;
+  const pts = [];
+  // standing against (or in the door gap of) the obstacle: first step clear of its face
+  if (horiz && y > o.y - m && y < o.y + o.h + m) { y = y > o.y + o.h / 2 ? o.y + o.h + m : o.y - m; pts.push({ x, y }); }
+  else if (!horiz && x > o.x - m && x < o.x + o.w + m) { x = x > o.x + o.w / 2 ? o.x + o.w + m : o.x - m; pts.push({ x, y }); }
+  const lo = horiz ? o.x - m : o.y - m, hi = horiz ? o.x + o.w + m : o.y + o.h + m;
+  const at = (v) => (horiz ? { x: v, y } : { x, y: v });
+  // corner point on the far side, when the goal lies beyond the obstacle
+  const far = (p) => horiz ? (y < o.y && ty > o.y ? { x: p.x, y: Math.min(WH - 3, o.y + o.h + m) } : y > o.y + o.h && ty < o.y + o.h ? { x: p.x, y: Math.max(12, o.y - m) } : null)
+    : (x < o.x && tx > o.x ? { x: Math.min(WW - 4, o.x + o.w + m), y: p.y } : x > o.x + o.w && tx < o.x + o.w ? { x: Math.max(4, o.x - m), y: p.y } : null);
+  const ends = [];
+  for (const [side, v0] of [[0, lo], [1, hi]]) { // slide the end point toward the obstacle until it is walkable (a neighbouring wall may sit right there)
+    if (side === skipSide) continue;
+    for (let k = 0, v = v0; k <= 2 * m; k++, v += side ? -0.5 : 0.5) {
+      const q = at(v);
+      if (blocked(q.x, q.y)) continue;
+      const f = far(q);
+      if (!f || !blocked(f.x, f.y)) ends.push({ side, p: q, f });
+      break;
+    }
+  }
+  if (!ends.length) return false;
+  const cost = ({ p, f }) => { const l = f || p; return Math.hypot(p.x - x, p.y - y) + (f ? Math.hypot(f.x - p.x, f.y - p.y) : 0) + Math.hypot(tx - l.x, ty - l.y); };
+  ends.sort((a, b) => cost(a) - cost(b));
+  const { side, p, f } = ends[0];
+  pts.push(p);
+  if (f) pts.push(f);
+  let len = 0;
+  for (let i = 0, q = e; i < pts.length; q = pts[i++]) len += Math.hypot(pts[i].x - q.x, pts[i].y - q.y);
+  e.avoid = { pts, o, horiz, side, t: 1.5 + len / Math.max(2, spd * 0.5), fail: 0, flipped: skipSide != null };
+  e.detourT = 0;
+  return true;
 }
 function steer(e, tx, ty, spd, dt, animK = 0.35, thru = false) {
+  const gx = tx, gy = ty;
+  if (e.avoid && !thru) { // detouring around an obstacle: follow its waypoints first
+    const a = e.avoid;
+    while (a.pts.length && Math.hypot(a.pts[0].x - e.x, a.pts[0].y - e.y) < 1.5) a.pts.shift();
+    if ((a.t -= dt) <= 0 || !a.pts.length) e.avoid = null;
+    else { tx = a.pts[0].x; ty = a.pts[0].y; }
+  } else if (thru) e.avoid = null;
   let dx = tx - e.x, dy = ty - e.y;
   const d = Math.hypot(dx, dy) || 1;
   dx /= d; dy /= d;
@@ -1417,9 +1478,17 @@ function steer(e, tx, ty, spd, dt, animK = 0.35, thru = false) {
   }
   const step = Math.min(spd * dt, d);
   const ox = e.x, oy = e.y;
-  tryMove(e, mx * step, my * step);
+  tryMove(e, mx * step, my * step, !thru);
   const moved = Math.hypot(e.x - ox, e.y - oy);
-  if (!thru && step > 0.05 && moved < step * 0.3 && e.detourT <= 0) {
+  if (!thru && step > 0.05 && moved < step * 0.3 && e.avoid) { // the detour itself is blocked: try the other end once, then give up
+    const a = e.avoid;
+    if (++a.fail > 10) { e.avoid = null; if (!a.flipped) planAround(e, a.o, gx, gy, a.horiz, spd, a.side); }
+  } else if (!thru && step > 0.05 && moved < step * 0.3 && e.detourT <= 0) {
+    const o = obstacleAt(e, e.x + dx * 2.5, e.y + dy * 2.5) || obstacleAt(e, e.x + Math.sign(dx) * 2.5, e.y) || obstacleAt(e, e.x, e.y + Math.sign(dy) * 2.5);
+    if (o) { // slide along the face we hit: top/bottom face -> go sideways, left/right face -> go up/down
+      const horiz = e.x > o.x - 1 && e.x < o.x + o.w + 1;
+      if (planAround(e, o, gx, gy, horiz, spd)) { e.anim += moved * animK; return d; }
+    }
     let s = Math.random() < 0.5 ? 1 : -1;
     if (blocked(e.x - dy * s * 5, e.y + dx * s * 5)) s = -s;
     e.ddx = -dy * s; e.ddy = dx * s; e.detourT = rand(0.3, 0.8);
@@ -1675,7 +1744,7 @@ function killHuman(h) { // killed by a skeleton — no infection
   splat(h.x, h.y, '#7a0e0e', 12);
 }
 function hurtUndead(u, d) {
-  if (u.strain === 'preta') d *= 0.5; // bullets pass through a spirit
+  if (u.strain === 'preta') d *= 0.7; // bullets half pass through a spirit
   u.hp -= d; u.flash = 0.08;
   if (u.kind === 'zombie') bleed(u.x, u.y - 5, 3, pick(['#4f6b2a', '#5a2a1a', '#3e5a22']));
   else bleed(u.x, u.y - 5, 2, '#e8e4d0');
@@ -1686,9 +1755,9 @@ function killUndead(u) {
   if (u.strain === 'bomb') { zombieBlast(u, 0.6); return; } // shot bloaters still pop
   u.dead = true;
   if (u.strain === 'preta') {
-    G.pretaCd = 30;
+    G.pretaCd = 45;
     for (let i = 0; i < 24; i++) G.parts.push({ x: u.x + rand(-3, 3), y: u.y - rand(0, 14), vx: rand(-14, 14), vy: rand(-30, -8), gy: u.y - 20, col: pick(['#d8e8ff', '#b48cff', '#ffffff']), stain: false });
-    if (inView(u.x, u.y)) toast('ผีเปรตสลายไป... เรียกใหม่ได้ใน 30 วิ');
+    if (inView(u.x, u.y)) toast('ผีเปรตสลายไป... เรียกใหม่ได้ใน 45 วิ');
   }
   if (u.kind === 'skel') Snd.play('bones', u.x, u.y);
   if (u.kind === 'zombie') {
@@ -1811,23 +1880,23 @@ function updPreta(u, dt) {
     if (h.state !== 'ok') continue;
     const dx = h.x - u.x, dy = h.y - u.y;
     if (dx * dx + dy * dy > R * R) continue;
-    const dmg = u.dmg * 0.9 * dt * (h.kind === 'boss' ? 0.35 : 1) * h.armor;
+    const dmg = u.dmg * 0.6 * dt * (h.kind === 'boss' ? 0.25 : 1) * h.armor;
     h.hp -= dmg; fed += dmg;
     h.threat = u; h.fearT = 2; h.flash = Math.max(h.flash, 0.04);
     if (Math.random() < dt * 5) G.parts.push({ x: h.x, y: h.y - 5, vx: (u.x - h.x) * 1.6, vy: (u.y - 8 - h.y) * 1.6, gy: u.y - 6, col: pick(['#c9a8ff', '#e8dcff', '#8a6ad0']), stain: false });
     if (h.hp <= 0) { if (h.kind === 'boss') killBoss(h); else { Snd.play('scream', h.x, h.y, h.voice * 0.9); infectHuman(h); } }
   }
-  if (fed > 0) u.hp = Math.min(u.maxHp, u.hp + fed * 0.5);
+  if (fed > 0) u.hp = Math.min(u.maxHp, u.hp + fed * 0.25);
   // howl: everyone nearby freezes in terror, gunmen drop their aim
   u.howlT -= dt;
   if (u.howlT <= 0 && t) {
-    u.howlT = 14;
+    u.howlT = 20;
     let n = 0;
     for (const h of G.humans) {
-      if (h.state !== 'ok' || h.kind === 'boss' || Math.hypot(h.x - u.x, h.y - u.y) > 80) continue;
-      h.shockT = Math.max(h.shockT, 1.6); h.alerted = true; h.alertT = 1.4; h.fearT = 3; h.cd = Math.max(h.cd, 1.6); h.throwT = 0; n++;
+      if (h.state !== 'ok' || h.kind === 'boss' || Math.hypot(h.x - u.x, h.y - u.y) > 60) continue;
+      h.shockT = Math.max(h.shockT, 1.1); h.alerted = true; h.alertT = 1.4; h.fearT = 3; h.cd = Math.max(h.cd, 1.1); h.throwT = 0; n++;
     }
-    G.booms.push({ x: u.x, y: u.y - 6, r: 40, life: 0.6, max: 0.6, rage: true });
+    G.booms.push({ x: u.x, y: u.y - 6, r: 30, life: 0.6, max: 0.6, rage: true });
     G.shake = Math.max(G.shake, 0.3);
     Snd.play('roar', u.x, u.y);
     if (n && inView(u.x, u.y)) float(u.x, u.y - 22, 'โหยหวน!', '#c9a8ff');
@@ -2594,7 +2663,7 @@ function plazaPoint() { // an open spot on a road crossing
   }
   return randomFree(true);
 }
-function startEvent(k) {
+function startEvent(k, quiet) {
   const def = EVENTS[k];
   const e = G.ev = { k, t: def.dur, T: def.dur };
   G.evN++;
@@ -2635,7 +2704,7 @@ function startEvent(k) {
     const p = randomFree(true);
     e.crate = { x: p.x, y: p.y, drop: 2 };
   }
-  toast(`${def.name}! ${def.desc}`);
+  if (!quiet) toast(`${def.name}! ${def.desc}`);
   Snd.play('event');
   UI.evDirty = true;
 }
@@ -2675,13 +2744,15 @@ function updEvents(dt) {
   }
   if (G.cleared) return;
   const e = G.ev;
+  if (!e && G.openEv) { const k = G.openEv; G.openEv = null; startEvent(k, true); return; } // stage is set before the first zombie rises
   if (!e) {
     if (G.L < 3 || G.evN >= 4 || (G.evT -= dt) > 0) return;
     G.evT = rand(30, 50);
     let alive = 0;
     for (const h of G.humans) if (h.state === 'ok') alive++;
     if (alive < 8) return;
-    startEvent(pick(Object.keys(EVENTS).filter((k) => G.L >= (EVENTS[k].from || 3))));
+    const ks = Object.keys(EVENTS).filter(evOK);
+    if (ks.length) startEvent(pick(ks));
     return;
   }
   e.t -= dt;
@@ -3958,7 +4029,7 @@ function buildSystem(list) {
       <h3>เส้นทาง & อีเวนต์</h3>
       <ul class="howto">
         <li><b>แผนที่เลือกเส้นทาง</b> — ทุกครั้งที่ผ่านด่าน (ตั้งแต่ด่าน 3) ได้เลือก 1 ใน 3 ย่านที่จะบุกต่อ สุ่มชุดใหม่ทุกครั้ง · ป้ายเขียว = ข้อดี ป้ายแดง = ข้อเสีย · ย่านที่เลือกจะถูกจำไว้ตอนกดเล่นซ้ำหรือย้อนด่าน ส่วนตำแหน่งคนสุ่มใหม่ทุกครั้ง · ถ้าไม่เลือกภายในเวลา ระบบสุ่มให้</li>
-        <li><b>อีเวนต์สุ่มกลางด่าน</b> (ด่าน 3+ สูงสุด 4 ครั้ง/ด่าน): ลอยกระทง (ฝูงชนแห่มาดูพลุ คนละ x2) · จันทร์สีเลือด (เลือด x3 ซอมบี้กัดแรงและดูดเลือด) · คอนเสิร์ตหมอลำ (ฝูงชนเยอะมากไม่สนซอมบี้ คนละ x2) · ไฟดับ (คนมองไม่เห็นและยิงพลาด) · ด่านตรวจทหาร (รถทหาร 2 คัน ค่าหัว x3) · เสบียงตกจากฟ้า (แย่งกล่องกับคนถือปืน ได้ซอมบี้ฟรีด้วย) · ฝูงศพตื่น (ซอมบี้ฟรีผุดทั้งเมือง) · ไข้หวัดระบาด (มนุษย์เดินช้าลง 40%)</li>
+        <li><b>อีเวนต์สุ่ม</b> (ด่าน 3+ สูงสุด 4 ครั้ง/ด่าน · ลอยกระทงและคอนเสิร์ตจัดตั้งแต่เริ่มด่าน · ไฟดับและจันทร์สีเลือดเกิดเฉพาะด่านกลางคืน): ลอยกระทง (ฝูงชนแห่มาดูพลุ คนละ x2) · จันทร์สีเลือด (เลือด x3 ซอมบี้กัดแรงและดูดเลือด) · คอนเสิร์ตหมอลำ (ฝูงชนเยอะมากไม่สนซอมบี้ คนละ x2) · ไฟดับ (คนมองไม่เห็นและยิงพลาด) · ด่านตรวจทหาร (รถทหาร 2 คัน ค่าหัว x3) · เสบียงตกจากฟ้า (แย่งกล่องกับคนถือปืน ได้ซอมบี้ฟรีด้วย) · ฝูงศพตื่น (ซอมบี้ฟรีผุดทั้งเมือง) · ไข้หวัดระบาด (มนุษย์เดินช้าลง 40%)</li>
         <li><b>กำแพงและรั้ว</b> — เมืองล้อมด้วยกำแพง แต่ละย่านมีรั้วตามสไตล์ (เหล็กดัด · กำแพงแดงเยาวราช · กำแพงเมืองเก่า · รั้วไม้) และคฤหาสน์มีกำแพงล้อมรอบ เข้าออกได้ทางประตูรั้วเท่านั้น</li>
         <li><b>ผีเปรต</b> — ซอมบี้พิเศษ มีได้ตัวเดียวในสนาม ลอยทะลุกำแพง ดูดชีวิตคนรอบตัว และร้องโหยหวนให้คนช็อกค้าง (ปลดล็อกในแท็บซอมบี้ ราคากระดูก)</li>
         <li>พิมพ์เลขด่านในช่อง <b>ด่าน</b> ด้านบนแผนที่ แล้วกด Enter เพื่อกลับไปเล่นด่านที่เคยผ่าน</li>

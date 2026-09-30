@@ -88,7 +88,7 @@ main {
 
 /* in-game top column: level bar, boss bar, event pill, toast */
 #topc {
-  position: absolute; top: 8px; left: 196px; right: 52px;
+  position: absolute; top: 8px; left: 196px; right: 196px; /* symmetric insets keep the bar centred on the stage, clear of the HUD */
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   line-height: 1.2; pointer-events: none;
 }
