@@ -137,6 +137,7 @@ const STRAINS = {
   spit: { name: 'ถ่มกรด', icon: 'spit', key: 'x', cost: 1.3, sprite: 'spitter' },
   bomb: { name: 'บึ้มพลีชีพ', icon: 'bomb', key: 'c', cost: 2.5, sprite: 'bomber' },
   tank: { name: 'ถังเลือด', icon: 'tank', key: 'v', cost: 2.5, sprite: 'tank' },
+  preta: { name: 'ผีเปรต', icon: 'preta', key: 'b', cost: 6, sprite: 'preta' }, // only one at a time
 };
 function strainMul(s) {
   const l = Math.max(1, U(s)) - 1;
@@ -144,28 +145,33 @@ function strainMul(s) {
     case 'spit': return { hp: 0.7 * (1 + 0.2 * l), dmg: 1.0 * (1 + 0.2 * l), spd: 1 };
     case 'bomb': return { hp: 0.6, dmg: 4 * (1 + 0.25 * l), spd: 1.25 };
     case 'tank': return { hp: 4 * (1 + 0.25 * l), dmg: 0.8, spd: 0.7 };
+    case 'preta': return { hp: 8 * (1 + 0.25 * l), dmg: 1.5 * (1 + 0.2 * l), spd: 0.8 };
     case 'dog': return { hp: 0.6, dmg: 0.7, spd: 1.7 }; // risen from a dead dog: fast and fragile
     default: return { hp: 1, dmg: 1, spd: 1 };
   }
 }
+const pretaR = (l) => Math.min(38, 20 + 1.2 * l); // aura radius
 const strainUnlocked = (s) => s === 'basic' || U(s) > 0;
 const strainCost = (s) => F.zCost() * STRAINS[s].cost;
-// level scaling
+// level scaling. Past the knee (L25) humans toughen faster than the rewards grow, so a maxed-out
+// horde can't just roll over the late game (growth: a per level up to the knee, b per level after)
+const KNEE = 25;
+const grow = (a, b, L) => Math.pow(a, Math.min(L - 1, KNEE - 1)) * Math.pow(b, Math.max(0, L - KNEE));
 const LV = {
   count: (L) => Math.min(340, Math.round(16 + L * 4.5)),
-  hp: (L) => 20 * Math.pow(1.12, L - 1),
-  gunDmg: (L) => 4 * Math.pow(1.1, L - 1),
-  police: (L) => (L < 3 ? 0 : Math.min(0.24, 0.06 + (L - 3) * 0.02)),
-  brute: (L) => (L < 4 ? 0 : Math.min(0.1, 0.04 + (L - 4) * 0.008)),
-  swat: (L) => (L < 6 ? 0 : Math.min(0.1, 0.03 + (L - 6) * 0.008)),
-  soldier: (L) => (L < 8 ? 0 : Math.min(0.18, 0.04 + (L - 8) * 0.012)),
+  hp: (L) => 20 * grow(1.12, 1.19, L),
+  gunDmg: (L) => 4 * grow(1.1, 1.15, L),
+  police: (L) => (L < 3 ? 0 : Math.min(0.24, 0.06 + (L - 3) * 0.02) + (L > KNEE ? Math.min(0.1, (L - KNEE) * 0.004) : 0)),
+  brute: (L) => (L < 4 ? 0 : Math.min(0.1, 0.04 + (L - 4) * 0.008) + (L > KNEE ? Math.min(0.06, (L - KNEE) * 0.003) : 0)),
+  swat: (L) => (L < 6 ? 0 : Math.min(0.1, 0.03 + (L - 6) * 0.008) + (L > KNEE ? Math.min(0.1, (L - KNEE) * 0.004) : 0)),
+  soldier: (L) => (L < 8 ? 0 : Math.min(0.18, 0.04 + (L - 8) * 0.012) + (L > KNEE ? Math.min(0.14, (L - KNEE) * 0.005) : 0)),
   dog: (L) => (L < 4 ? 0 : Math.min(0.08, 0.03 + (L - 4) * 0.003)),
-  blood: (L) => 2 * Math.pow(1.17, L - 1),
-  brain: (L) => 0.25 * Math.pow(1.14, L - 1),
-  bone: (L) => 0.6 * Math.pow(1.13, L - 1),
-  clearBrains: (L) => (3 + L) * Math.pow(1.14, L - 1),
-  clearBones: (L) => (2 + L * 0.5) * Math.pow(1.13, L - 1),
-  doorHp: (L) => 20 * Math.pow(1.12, L - 1) * 4,
+  blood: (L) => 2 * grow(1.17, 1.11, L),
+  brain: (L) => 0.25 * grow(1.14, 1.08, L),
+  bone: (L) => 0.6 * grow(1.13, 1.07, L),
+  clearBrains: (L) => (3 + L) * grow(1.14, 1.08, L),
+  clearBones: (L) => (2 + L * 0.5) * grow(1.13, 1.07, L),
+  doorHp: (L) => 20 * grow(1.12, 1.19, L) * 4,
 };
 // map grows every 5 levels: 480x270 → up to 3x (1440x810)
 function worldSize(L) {
@@ -193,7 +199,7 @@ const WEATHER = {
 };
 function rollWeather(L) {
   if (L <= 2) return 'clear';
-  const x = Math.random();
+  const x = mulberry32(L * 131 + 7)(); // same weather every visit to a level
   return x < 0.4 ? 'clear' : x < 0.6 ? 'hot' : x < 0.8 ? 'cold' : 'flood';
 }
 // every 10th level: one random boss. hp = multiple of a civilian's hp at that level
@@ -216,15 +222,15 @@ const isBossLevel = (L) => L % 10 === 0;
 // ---------- route map: after clearing a new level, pick which district to invade next ----
 // count/armed/soldiers/dogs scale the population · blood/brains/bones/all scale rewards
 const ROUTES = {
-  normal: { name: 'ย่านทั่วไป', icon: 'house', desc: 'ไม่มีผลพิเศษ' },
-  market: { name: 'ตลาดนัดกลางเมือง', icon: 'tent', desc: 'คนเยอะ x1.6 · เลือด x1.2', count: 1.6, blood: 1.2, from: 3 },
-  rich: { name: 'หมู่บ้านไฮโซ', icon: 'crown', desc: 'คฤหาสน์ +2 หลัง · บอดี้การ์ดเพียบ · เลือด x1.5', mansions: 2, blood: 1.5, from: 4 },
-  police: { name: 'ใกล้สถานีตำรวจ', icon: 'badge', desc: 'ตำรวจ/SWAT x2.5 · สมอง x2 · กระดูก x2', armed: 2.5, brains: 2, bones: 2, from: 5 },
-  slum: { name: 'ชุมชนแออัด', icon: 'house', desc: 'ประตูผุ (HP x0.4) · ไม่มีคนถือปืน · คน x1.3 · เลือด x0.8', doorHp: 0.4, armed: 0, count: 1.3, blood: 0.8, from: 3 },
-  temple: { name: 'งานวัดประจำปี', icon: 'temple', desc: 'คน x1.3 · หมาวัดเยอะ x3 · สมอง x1.5', count: 1.3, dogs: 3, brains: 1.5, from: 5 },
-  army: { name: 'ค่ายทหาร', icon: 'helmet', desc: 'ทหารเยอะ x3 · กระดูก x3 · เลือด x1.3', soldiers: 3, bones: 3, blood: 1.3, from: 9 },
-  river: { name: 'ริมเจ้าพระยา', icon: 'flood', desc: 'น้ำท่วมแน่นอน · รางวัลทั้งหมด x1.5', weather: 'flood', all: 1.5, from: 4 },
-  quiet: { name: 'ชานเมืองเงียบสงบ', icon: 'quiet', desc: 'คนน้อย x0.6 · ไม่มีคนถือปืน · สมองตอนผ่านด่าน x2', count: 0.6, armed: 0, clear: 2, from: 3 },
+  normal: { name: 'ย่านทั่วไป', icon: 'house', pro: [], con: [] },
+  market: { name: 'ตลาดนัดกลางเมือง', icon: 'tent', pro: ['คนเยอะ x1.6', 'เลือด x1.2'], con: ['เก็บกวาดนานขึ้น'], count: 1.6, blood: 1.2, from: 3 },
+  rich: { name: 'หมู่บ้านไฮโซ', icon: 'crown', pro: ['เลือด x1.5'], con: ['คฤหาสน์ +2 หลัง', 'บอดี้การ์ดเพียบ'], mansions: 2, blood: 1.5, from: 4 },
+  police: { name: 'ใกล้สถานีตำรวจ', icon: 'badge', pro: ['สมอง x2', 'กระดูก x2'], con: ['ตำรวจ/SWAT x2.5'], armed: 2.5, brains: 2, bones: 2, from: 5 },
+  slum: { name: 'ชุมชนแออัด', icon: 'house', pro: ['ประตูผุ HP x0.4', 'ไม่มีคนถือปืน', 'คน x1.3'], con: ['เลือด x0.8'], doorHp: 0.4, armed: 0, count: 1.3, blood: 0.8, from: 3 },
+  temple: { name: 'งานวัดประจำปี', icon: 'temple', pro: ['คน x1.3', 'สมอง x1.5'], con: ['หมาวัด x3'], count: 1.3, dogs: 3, brains: 1.5, from: 5 },
+  army: { name: 'ค่ายทหาร', icon: 'helmet', pro: ['กระดูก x3', 'เลือด x1.3'], con: ['ทหาร x3'], soldiers: 3, bones: 3, blood: 1.3, from: 9 },
+  river: { name: 'ริมเจ้าพระยา', icon: 'flood', pro: ['รางวัลทั้งหมด x1.5'], con: ['น้ำท่วมแน่นอน'], weather: 'flood', all: 1.5, from: 4 },
+  quiet: { name: 'ชานเมืองเงียบสงบ', icon: 'quiet', pro: ['ไม่มีคนถือปืน', 'สมองตอนผ่านด่าน x2'], con: ['คนน้อย x0.6'], count: 0.6, armed: 0, clear: 2, from: 3 },
 };
 const routeOf = (L) => ROUTES[S.routes[L]] || ROUTES.normal;
 function rollRoutes(L) {
@@ -238,12 +244,14 @@ const routeMul = (cur) => (G && G.route ? (G.route[cur] || 1) * (G.route.all || 
 
 // ---------- random events mid-level --------------------------------------------
 const EVENTS = {
-  festival: { name: 'เทศกาลลอยกระทง', icon: 'lantern', desc: 'พลุแตกกลางเมือง! ผู้คนออกจากบ้านมาดูพลุ', dur: 20 },
-  bloodmoon: { name: 'จันทร์สีเลือด', icon: 'moon', desc: 'ทุกการฆ่าได้เลือด x3', dur: 20 },
-  concert: { name: 'คอนเสิร์ตหมอลำซิ่ง', icon: 'note', desc: 'ฝูงชนมาเต้นรวมกันกลางลาน — บุฟเฟต์ของซอมบี้!', dur: 30 },
-  blackout: { name: 'ไฟดับทั้งเมือง', icon: 'bulb', desc: 'มนุษย์มองเห็นซอมบี้ได้แค่ระยะใกล้ในความมืด', dur: 20 },
-  army: { name: 'ด่านตรวจทหาร', icon: 'helmet', desc: 'รถทหารนำกำลังเสริมมา · ทหารชุดนี้ให้รางวัล x3', dur: 6, from: 8 },
-  airdrop: { name: 'เสบียงตกจากฟ้า', icon: 'crate', desc: 'ให้ซอมบี้ไปถึงกล่องก่อนคนถือปืน! (สมอง + กระดูก + พลังงานเต็ม)', dur: 30 },
+  festival: { name: 'เทศกาลลอยกระทง', icon: 'lantern', desc: 'พลุแตกกลางเมือง! ฝูงชนแห่มาดู ทุกคนในงานให้เลือด x2', dur: 25 },
+  bloodmoon: { name: 'จันทร์สีเลือด', icon: 'moon', desc: 'ทุกการฆ่าได้เลือด x3 · ซอมบี้กัดแรงขึ้น 35% และดูดเลือดฟื้นพลังจากการกัด', dur: 28 },
+  concert: { name: 'คอนเสิร์ตหมอลำซิ่ง', icon: 'note', desc: 'ฝูงชนมหาศาลมาเต้นกลางลาน ไม่สนซอมบี้จนกว่าจะโดนกัด · คนละ 2 เท่า — บุฟเฟต์!', dur: 30 },
+  blackout: { name: 'ไฟดับทั้งเมือง', icon: 'bulb', desc: 'มนุษย์มองเห็นแค่ระยะใกล้ ยิงพลาดเกินครึ่ง ซอมบี้เน่าช้าลง', dur: 25 },
+  army: { name: 'ด่านตรวจทหาร', icon: 'helmet', desc: 'รถทหาร 2 คันนำกำลังเสริมมา · ทหารชุดนี้ให้รางวัล x3', dur: 8, from: 8 },
+  airdrop: { name: 'เสบียงตกจากฟ้า', icon: 'crate', desc: 'ชิงกล่องก่อนคนถือปืน! ได้สมอง + กระดูกก้อนใหญ่ + พลังงานเต็ม + ซอมบี้ฟรี', dur: 30 },
+  horde: { name: 'ฝูงศพตื่นจากสุสาน', icon: 'skull', desc: 'ดินสั่นสะเทือน! ซอมบี้ฟรีผุดขึ้นมารอบเมืองเป็นกองทัพ', dur: 5, from: 4 },
+  outbreak: { name: 'ไข้หวัดระบาด', icon: 'plague', desc: 'มนุษย์เกือบทั้งเมืองป่วย เดินช้าลง 40% หนีไม่ทัน', dur: 30, from: 5 },
 };
 const evOn = (k) => !!(G && G.ev && G.ev.k === k);
 
@@ -278,6 +286,8 @@ const UPG = [
     show: (l) => (l ? `แรงระเบิด ${fmt(F.zDmg() * 4 * (1 + 0.25 * (l - 1)))}` : 'ยังไม่ปลดล็อก') },
   { id: 'tank', tab: 'strains', cur: 'bones', icon: 'tank', name: 'ซอมบี้ถังเลือด', desc: 'อ้วนเลือดหนา เดินช้า คนถือปืนจะหันมายิงตัวนี้ก่อน (ล่อเป้า) · ใช้พลังงาน x2.5', base: 40, g: 1.7, max: 25,
     show: (l) => (l ? `HP ${fmt(F.zHp() * 4 * (1 + 0.25 * (l - 1)))}` : 'ยังไม่ปลดล็อก') },
+  { id: 'preta', tab: 'strains', cur: 'bones', icon: 'preta', name: 'ผีเปรต', desc: 'วิญญาณหิวโหยตัวเดียวในสนาม · ลอยทะลุกำแพง รั้ว และบ้าน · ออร่าดูดชีวิตมนุษย์รอบตัวมาเติมเลือดตัวเอง คนที่ตายกลายเป็นซอมบี้ · ทุก 14 วิร้องโหยหวนให้คนรอบข้างช็อกค้าง · กระสุนเจ็บแค่ครึ่งเดียว · ไม่เน่า · ตายแล้วเรียกใหม่ได้หลัง 30 วิ · ใช้พลังงาน x6', base: 300, g: 1.7, max: 25,
+    show: (l) => (l ? `HP ${fmt(F.zHp() * 8 * (1 + 0.25 * (l - 1)))} · ออร่า ${Math.round(pretaR(l - 1))}` : 'ยังไม่ปลดล็อก') },
 ];
 // permanent upgrades bought with soul essence (kept through prestige)
 const PUP = [
@@ -292,7 +302,7 @@ const PUP = [
 ];
 const SPELLS = [
   // frenzy's cooldown only starts ticking once the rage wears off, so it can never be permanent
-  { id: 'frenzy', store: 'spells', cur: 'brains', icon: 'frenzy', key: '1', name: 'คลั่งเลือด', desc: 'ซอมบี้ทุกตัวเร็วขึ้นและกัดถี่ขึ้น x1.6 · คูลดาวน์เริ่มนับหลังหมดฤทธิ์', base: 15, g: 1.9, max: 15,
+  { id: 'frenzy', store: 'spells', cur: 'brains', icon: 'frenzy', key: '1', name: 'คลั่งเลือด', desc: 'ซอมบี้ทุกตัวกัดถี่ขึ้น x1.6 และวิ่งเร็วขึ้น x1.35 (เร็วสุดไม่เกินที่กำหนด) · คูลดาวน์เริ่มนับหลังหมดฤทธิ์', base: 15, g: 1.9, max: 15,
     cd: (l) => 50 * Math.pow(0.95, l - 1), dur: (l) => 5 + l,
     show: (l) => `นาน ${5 + Math.max(1, l)} วิ · คูลดาวน์ ${Math.round(50 * Math.pow(0.95, Math.max(1, l) - 1))} วิ` },
   { id: 'plague', store: 'spells', cur: 'brains', icon: 'plague', key: '2', name: 'หมอกโรคระบาด', desc: 'คลิกเลือกจุดบนแผนที่ มนุษย์ในรัศมีติดเชื้อทันที (คนที่หลบอยู่ในบ้านไม่ติด)', base: 40, g: 1.9, max: 15,
@@ -382,6 +392,15 @@ const THEMES = [
     styles: { wood: 5, house: 2, temple: 1, seven: 1 }, palm: true, canal: true, grave: 'thai',
     walls: ['#e8dcc4', '#d8c8a8', '#c8d8c0'], roofs: ['#9aa0a4', '#8a9094', '#b85a2a'], tree: ['#2a6a26', '#357a2e', '#42902f'], trunk: '#5a3a20' },
 ];
+// walls & fences follow the district: iron railings, red Chinatown walls, white crenellated old-city walls...
+const FENCES = {
+  iron: { iron: 1, face: '#9a9ea8', shade: '#6a6e78', cap: '#c4c8d0', post: '#7a7e88', bar: '#23262c' },
+  red: { face: '#b8302a', shade: '#7a1e1a', cap: '#e8b83a', post: '#d8a030' },
+  crenel: { crenel: 1, face: '#f0ece0', shade: '#c0b8a4', cap: '#fffaf0', post: '#e0d8c4' },
+  night: { face: '#3a3848', shade: '#22202c', cap: '#6a6880', post: '#4a4860', neon: '#ff5ab0' },
+  wood: { wood: 1, face: '#9a6a3a', shade: '#6a4626', cap: '#b88a52', post: '#7a5028' },
+};
+const FENCE_OF = { 'สุขุมวิท': 'iron', 'เยาวราช': 'red', 'เกาะรัตนโกสินทร์': 'crenel', 'สีลมยามค่ำคืน': 'night', 'ริมคลองฝั่งธน': 'wood' };
 const themeOf = (L) => THEMES[Math.floor((L - 1) / 10) % THEMES.length];
 const FLOORS = ['#8a6a48', '#a07c52', '#7a5a3e', '#b0a090', '#9a8a70', '#6e5a4a'];
 const RUGS = ['#8a2a2a', '#2a4a7a', '#3a6a3a', '#7a5a2a', '#5a2a6a'];
@@ -408,6 +427,29 @@ function genMap(L, RT = ROUTES.normal) {
   const top = Pix.mk(WW, WH), tg = top.getContext('2d');
   let hasTop = false;
   const rect = (c, col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
+  // ---- walls & fences: solid rects registered in the collision grid (see-through for line of sight) ----
+  const walls = [], FC = FENCES[FENCE_OF[th.name]] || FENCES.crenel;
+  const fenceH = (x, y, len, f = FC, solid = true) => { // y = top of a 5px-tall wall
+    rect(g, 'rgba(0,0,0,.28)', x + 1, y + 5, len, 1);
+    if (f.iron) {
+      rect(g, f.shade, x, y + 1, len, 1); rect(g, f.shade, x, y + 3, len, 1);
+      for (let xx = x; xx < x + len; xx += 2) { rect(g, f.bar, xx, y, 1, 4); rect(g, f.cap, xx, y - 1, 1, 1); }
+    } else {
+      rect(g, f.face, x, y + 1, len, 3); rect(g, f.shade, x, y + 4, len, 1); rect(g, f.cap, x, y, len, 1);
+      if (f.crenel) for (let xx = x; xx < x + len; xx += 4) rect(g, f.cap, xx, y - 1, 2, 1);
+      if (f.wood) for (let xx = x + 1; xx < x + len; xx += 2) rect(g, f.shade, xx, y + 1, 1, 3);
+      if (f.neon) rect(g, f.neon, x, y + 2, len, 1);
+    }
+    for (const px of [x - 1, x + len - 1]) { rect(g, f.post, px, y - 1, 2, 6); rect(g, f.cap, px, y - 1, 2, 1); }
+    if (solid) walls.push({ x, y, w: len, h: 4, wall: true });
+  };
+  const fenceV = (x, y, len, f = FC, solid = true) => { // x = left of a 3px-wide wall
+    rect(g, 'rgba(0,0,0,.25)', x + 3, y + 1, 1, len);
+    if (f.iron) { rect(g, f.shade, x + 1, y, 1, len); for (let yy = y; yy < y + len; yy += 2) rect(g, f.bar, x, yy, 3, 1); }
+    else { rect(g, f.face, x, y, 3, len); rect(g, f.cap, x + 1, y, 1, len); rect(g, f.shade, x + 2, y, 1, len); if (f.neon) rect(g, f.neon, x + 1, y + 1, 1, len - 2); }
+    rect(g, f.post, x, y - 1, 3, 2); rect(g, f.post, x, y + len - 1, 3, 2); rect(g, f.cap, x, y - 1, 3, 1);
+    if (solid) walls.push({ x, y, w: 3, h: len, wall: true });
+  };
 
   // ---- ground: grass noise written straight into a pixel buffer (one upload instead of ~100k draw calls) ----
   {
@@ -458,6 +500,21 @@ function genMap(L, RT = ROUTES.normal) {
   for (const x of xs) for (const y of ys) {
     for (let yy = y - HW + 1; yy < y + HW; yy += 2) { g.fillRect(x - HW - 7, yy, 4, 1); g.fillRect(x + HW + 3, yy, 4, 1); }
     for (let xx = x - HW + 1; xx < x + HW; xx += 2) { g.fillRect(xx, y - HW - 7, 1, 4); g.fillRect(xx, y + HW + 3, 1, 4); }
+  }
+
+  // ---- perimeter: the whole district is enclosed by a city wall (collision is the map-edge test in blocked()) ----
+  {
+    const f = FC.iron ? { face: '#9a9ea8', shade: '#6a6e78', cap: '#c4c8d0', post: '#7a7e88' } : FC, top = th.canal ? null : 6;
+    rect(g, f.face, 0, 0, 3, WH); rect(g, f.cap, 1, 0, 1, WH); rect(g, f.shade, 2, 0, 1, WH);
+    rect(g, f.face, WW - 3, 0, 3, WH); rect(g, f.cap, WW - 2, 0, 1, WH); rect(g, f.shade, WW - 3, 0, 1, WH);
+    rect(g, f.face, 0, WH - 4, WW, 4); rect(g, f.cap, 0, WH - 5, WW, 1); rect(g, f.shade, 0, WH - 1, WW, 1);
+    if (top != null) { rect(g, '#14101a', 0, 0, WW, top); rect(g, f.cap, 0, top, WW, 1); rect(g, f.face, 0, top + 1, WW, 3); rect(g, f.shade, 0, top + 4, WW, 1); }
+    if (f.crenel) for (let x = 0; x < WW; x += 4) { rect(g, f.cap, x, WH - 6, 2, 1); if (top != null) rect(g, f.cap, x, top - 1, 2, 1); }
+    for (let x = 12; x < WW - 8; x += 36) { // corner-style pillars along the top and bottom walls
+      rect(g, f.post, x, WH - 9, 4, 8); rect(g, f.cap, x, WH - 9, 4, 1); rect(g, f.shade, x + 3, WH - 8, 1, 7);
+      if (top != null) { rect(g, f.post, x, top - 2, 4, 7); rect(g, f.cap, x, top - 2, 4, 1); rect(g, f.shade, x + 3, top - 1, 1, 6); }
+    }
+    if (top == null) { rect(g, '#5a4a36', 0, 10, WW, 1); for (let x = 8; x < WW; x += 14) rect(g, '#7a6446', x, 8, 1, 3); } // canal-side railing
   }
 
   // ---- BTS skytrain viaduct over the middle horizontal road ----
@@ -580,10 +637,11 @@ function genMap(L, RT = ROUTES.normal) {
     const e = b.estate, ex = e.x + 3, ey = Math.max(e.y + 3, 13), ew = e.w - 6, eh = e.y + e.h - 3 - ey;
     for (let x = ex; x < ex + ew; x += 4) rect(g, (x / 4) % 2 ? '#4f9a3c' : '#5aa844', x, ey, 2, eh);
     const gateX = b.x + Math.floor(b.w / 2) - 7;
-    const hedge = (x, y, w, h) => { rect(g, '#1f4a1a', x, y + 1, w, h); rect(g, '#2f6a26', x, y, w, h); rect(g, '#3f8a30', x, y, w, 1); };
-    hedge(ex, ey, ew, 2); hedge(ex, ey, 2, eh); hedge(ex + ew - 2, ey, 2, eh);
-    hedge(ex, ey + eh - 2, gateX - ex, 2); hedge(gateX + 14, ey + eh - 2, ex + ew - gateX - 14, 2);
-    rect(g, '#d8b040', gateX - 1, ey + eh - 4, 2, 4); rect(g, '#d8b040', gateX + 13, ey + eh - 4, 2, 4); // gate posts
+    const EF = { face: '#f2eadc', shade: '#c8bca0', cap: '#b0402a', post: '#d8b040' }; // estate wall: cream plaster, red-tile cap, gold pillars
+    fenceH(ex, ey, ew, EF); fenceV(ex, ey, eh, EF); fenceV(ex + ew - 3, ey, eh, EF);
+    fenceH(ex, ey + eh - 5, gateX - ex, EF); fenceH(gateX + 14, ey + eh - 5, ex + ew - gateX - 14, EF);
+    b.gate = { x: gateX + 7, ex, ey, ew, eh };
+    rect(g, '#d8b040', gateX - 1, ey + eh - 6, 2, 6); rect(g, '#d8b040', gateX + 13, ey + eh - 6, 2, 6); // gate posts
     rect(g, '#c8bca4', gateX + 3, b.y + b.h + 1, 8, ey + eh - (b.y + b.h + 1)); // driveway
     const fy = b.y + b.h + 5, fx = b.x + 8;
     if (fy + 8 < ey + eh - 3) { // fountain
@@ -631,6 +689,25 @@ function genMap(L, RT = ROUTES.normal) {
         }
       }
     }
+  }
+
+  // ---- fences along the block edges: short runs with gaps, so the city reads as walled lots without trapping anyone ----
+  const fenceOK = (box) => clearSpot(box, 1) && !onRoad(box.x + box.w / 2, box.y + box.h / 2);
+  const putFence = (x, y, len, vert) => {
+    const box = vert ? { x, y, w: 3, h: len } : { x, y: y - 1, w: len, h: 7 };
+    if (len < 8 || !fenceOK(box)) return false;
+    if (vert) fenceV(x, y, len); else fenceH(x, y, len);
+    reserved.push({ x: box.x - 2, y: box.y - 2, w: box.w + 4, h: box.h + 4 });
+    return true;
+  };
+  for (const bk of blocks) {
+    if (used.has(bk)) continue;
+    const park = parks.includes(bk), prob = park ? 1 : 0.55;
+    const run = (a, b, fn) => { for (let t = a + RI(2, 10); t < b - 10; t += RI(park ? 10 : 12, park ? 14 : 22)) { const len = Math.min(RI(park ? 24 : 14, park ? 34 : 30), b - 4 - t); if (r() < prob) fn(t, len); t += len; } };
+    if (!bk.edgeB) run(bk.x + 4, bk.x + bk.w - 4, (t, len) => putFence(t, bk.y + bk.h - 5, len, false));
+    if (!bk.edgeT) run(bk.x + 4, bk.x + bk.w - 4, (t, len) => putFence(t, bk.y + 1, len, false));
+    if (!bk.edgeL) run(bk.y + 6, bk.y + bk.h - 6, (t, len) => putFence(bk.x, t, len, true));
+    if (!bk.edgeR) run(bk.y + 6, bk.y + bk.h - 6, (t, len) => putFence(bk.x + bk.w - 3, t, len, true));
   }
 
   // ---- trees: rain trees, palms, bananas ----
@@ -931,7 +1008,7 @@ function genMap(L, RT = ROUTES.normal) {
   // spatial grid of buildings (16px cells) for fast collision tests
   const C = 16, cols = Math.ceil(WW / C) + 1, rows = Math.ceil(WH / C) + 1;
   const grid = new Array(cols * rows);
-  for (const b of bld) {
+  for (const b of [...bld, ...walls]) {
     for (let cy = Math.floor((b.y - 2) / C); cy <= Math.floor((b.y + b.h + 2) / C); cy++) {
       for (let cx = Math.floor((b.x - 2) / C); cx <= Math.floor((b.x + b.w + 2) / C); cx++) {
         if (cx < 0 || cy < 0 || cx >= cols || cy >= rows) continue;
@@ -942,7 +1019,7 @@ function genMap(L, RT = ROUTES.normal) {
 
   MAP = {
     bg, g, roof, top: hasTop ? top : null, bts, b: bld, doors: bld.map((b) => b.door), grave, th, w: WW, h: WH, xs, ys, grid, cols,
-    mansions: bld.filter((b) => b.style === 'mansion'),
+    mansions: bld.filter((b) => b.style === 'mansion'), walls,
   };
 }
 
@@ -953,6 +1030,7 @@ function blocked(x, y) {
   if (!cell) return false;
   for (let i = 0; i < cell.length; i++) {
     const b = cell[i];
+    if (b.wall) { if (x > b.x - 0.5 && x < b.x + b.w + 0.5 && y > b.y - 0.5 && y < b.y + b.h + 0.5) return true; continue; }
     if (x <= b.x - 1 || x >= b.x + b.w + 1 || y <= b.y - 1 || y >= b.y + b.h + 1) continue;
     if (x > b.x + 2 && x < b.x + b.w - 2 && y > b.y + 6 && y < b.y + b.h - 2) return false; // floor
     const d = b.door;
@@ -966,7 +1044,7 @@ function spaceOf(x, y) {
   if (!cell) return null;
   for (let i = 0; i < cell.length; i++) {
     const b = cell[i];
-    if (x > b.x + 1 && x < b.x + b.w - 1 && y > b.y + 5 && y < b.y + b.h - 1) return b;
+    if (!b.wall && x > b.x + 1 && x < b.x + b.w - 1 && y > b.y + 5 && y < b.y + b.h - 1) return b;
   }
   return null;
 }
@@ -1059,7 +1137,7 @@ function newLevel(L) {
     energy: F.eMax(), frenzyT: 0, cleared: false, clearT: 0, skelQ: [], time: 0, total: 0, total0: 0, vanCount: 0, groanT: 3,
     shake: 0, boss: null, stuckT: 1, route: R, ev: null, evT: rand(22, 38), evN: 0, fw: [], choices: null,
     weather: R.weather || rollWeather(L), cur: { x: 0, y: 0 }, curA: Math.random() * 6.28, sky: [], thunderT: rand(8, 16), flashT: 0,
-    train: null, trainT: rand(3, 10),
+    train: null, trainT: rand(3, 10), pretaCd: 0,
   };
   // specials are sized from the base population; a district's crowd modifier only adds / removes civilians
   const n0 = LV.count(L), n = Math.min(420, Math.round(n0 * (R.count || 1)));
@@ -1154,7 +1232,9 @@ function makeZombie(x, y, fromPal, kind, strain = 'basic') {
     strain = 'dog';
     fromPal = { c: pick(['#6a7a5a', '#7a7a62', '#5a6a52']), b: pick(['#8a9a72', '#9aa080']), s: pick(ZSKIN), h: '#5a6a52', p: '#5a6a52' };
   }
-  const pal = fromPal ? Object.assign({}, fromPal, { s: pick(ZSKIN) }) : zombiePal();
+  const ghost = strain === 'preta';
+  if (ghost) fromPal = { h: '#d8e8ff', s: '#93a8c0', c: '#93a8c0', b: '#93a8c0', p: '#4a5468' };
+  const pal = ghost ? fromPal : fromPal ? Object.assign({}, fromPal, { s: pick(ZSKIN) }) : zombiePal();
   const big = isMelee(kind);
   const kindMul = big ? 4 : kind === 'soldier' ? 1.6 : kind === 'swat' ? 1.5 : kind === 'police' ? 1.3 : 1;
   const sm = strainMul(strain);
@@ -1164,7 +1244,7 @@ function makeZombie(x, y, fromPal, kind, strain = 'basic') {
   const sprite = big ? 'bigzombie' : strain === 'dog' ? 'zdog' : STRAINS[strain].sprite;
   return {
     t: 'u', kind: 'zombie', strain, big, x, y, hp, maxHp: hp, kindMul, hpMul, spdMul, dmgMul, dmg: F.zDmg() * dmgMul, spd: F.zSpd() * spdMul,
-    rad: big ? 5 : strain === 'tank' ? 4.5 : strain === 'dog' ? 2.6 : 3.2, reach: big ? 7 : strain === 'tank' ? 6 : 5,
+    rad: big ? 5 : ghost ? 3.6 : strain === 'tank' ? 4.5 : strain === 'dog' ? 2.6 : 3.2, reach: big ? 7 : strain === 'tank' ? 6 : 5, immune: ghost, howlT: 6,
     pal, spr: Pix.get(sprite, pal), dir: Math.random() < 0.5 ? 1 : -1, anim: 0, pose: 'walk', target: null, think: 0, cd: 0, space: spaceOf(x, y),
     detourT: 0, ddx: 0, ddy: 0, rise: big ? 0.7 : 0.5, riseMax: big ? 0.7 : 0.5, flash: 0, wt: 0, tx: x, ty: y, idle: 0, pitch: big ? rand(0.55, 0.7) : rand(0.8, 1.2),
   };
@@ -1253,6 +1333,7 @@ const inGapCol = (e, d) => Math.abs(e.x - d.x) < 2.3 && e.y > d.b.y + d.b.h - 7 
 // walk around a building to stand in front of its door
 function approach(e, d) {
   const b = d.b;
+  if (b.gate) { const w = viaGate(e, d); if (w) return w; }
   if (e.y >= b.y + b.h + 1 || inGapCol(e, d)) return d;
   const left = b.x - 5, right = b.x + b.w + 5;
   if (e.x > b.x - 4 && e.x < b.x + b.w + 4) return { x: e.x < b.x + b.w / 2 ? left : right, y: e.y };
@@ -1260,9 +1341,21 @@ function approach(e, d) {
 }
 // next waypoint from e toward point t in space tsp (null = outdoors). w.door = door on the way,
 // w.thru = walking straight through the doorway (no sidestepping allowed there)
+// walled mansion estates: everyone goes in and out through the gate
+function estateAt(x, y) {
+  for (const b of MAP.mansions) { const g = b.gate; if (x > g.ex && x < g.ex + g.ew && y > g.ey && y < g.ey + g.eh) return b; }
+  return null;
+}
+function viaGate(e, t) {
+  const ea = estateAt(e.x, e.y), ta = estateAt(t.x, t.y);
+  if (ea === ta) return null;
+  const g = (ea || ta).gate, gy = g.ey + g.eh, out = !!ea;
+  if (Math.abs(e.x - g.x) < 4 && e.y > gy - 9 && e.y < gy + 8) return { x: g.x, y: out ? gy + 6 : gy - 7, thru: true };
+  return { x: g.x, y: out ? gy - 7 : gy + 6 };
+}
 function route(e, t, tsp) {
   const esp = e.space;
-  if (esp === tsp) return t;
+  if (esp === tsp) return viaGate(e, t) || t;
   if (esp) { // leave the current house first
     const d = esp.door;
     if (inGapCol(e, d)) return { x: d.x, y: d.y + 3, door: d, thru: true };
@@ -1312,6 +1405,7 @@ function steer(e, tx, ty, spd, dt, animK = 0.35, thru = false) {
   let mx = dx, my = dy;
   e.inGap = thru;
   if (e.slowT > 0) spd *= 0.55; // acid-burned
+  if (e.sick) spd *= 0.6; // outbreak
   if (thru) { // in a doorway: slide to the centre line, never sidestep into the frame
     e.detourT = 0;
     const cx = clamp(tx - e.x, -1, 1);
@@ -1371,7 +1465,7 @@ function los(a, b) {
     const cell = cellAt(x, y);
     if (!cell) continue;
     for (const bd of cell) {
-      if (x > bd.x && x < bd.x + bd.w && y > bd.y && y < bd.y + bd.h && !(a.space === bd && b.space === bd)) return false;
+      if (!bd.wall && x > bd.x && x < bd.x + bd.w && y > bd.y && y < bd.y + bd.h && !(a.space === bd && b.space === bd)) return false;
     }
   }
   return true;
@@ -1442,6 +1536,7 @@ function float(x, y, text, col) {
 
 // ---------- combat ---------------------------------------------------------
 function bite(u, h, dmg) {
+  if (u.kind === 'zombie' && evOn('bloodmoon')) { dmg *= 1.35; u.hp = Math.min(u.maxHp, u.hp + dmg * 0.25); } // blood moon: bites hit harder and heal
   h.hp -= dmg * h.armor;
   // bosses get bitten constantly — only flash occasionally so they don't strobe
   if (h.kind !== 'boss' || G.time - (h.lastFlash || -9) > 0.45) { h.flash = h.kind === 'boss' ? 0.05 : 0.08; h.lastFlash = G.time; }
@@ -1580,6 +1675,7 @@ function killHuman(h) { // killed by a skeleton — no infection
   splat(h.x, h.y, '#7a0e0e', 12);
 }
 function hurtUndead(u, d) {
+  if (u.strain === 'preta') d *= 0.5; // bullets pass through a spirit
   u.hp -= d; u.flash = 0.08;
   if (u.kind === 'zombie') bleed(u.x, u.y - 5, 3, pick(['#4f6b2a', '#5a2a1a', '#3e5a22']));
   else bleed(u.x, u.y - 5, 2, '#e8e4d0');
@@ -1589,6 +1685,11 @@ function killUndead(u) {
   if (u.dead) return;
   if (u.strain === 'bomb') { zombieBlast(u, 0.6); return; } // shot bloaters still pop
   u.dead = true;
+  if (u.strain === 'preta') {
+    G.pretaCd = 30;
+    for (let i = 0; i < 24; i++) G.parts.push({ x: u.x + rand(-3, 3), y: u.y - rand(0, 14), vx: rand(-14, 14), vy: rand(-30, -8), gy: u.y - 20, col: pick(['#d8e8ff', '#b48cff', '#ffffff']), stain: false });
+    if (inView(u.x, u.y)) toast('ผีเปรตสลายไป... เรียกใหม่ได้ใน 30 วิ');
+  }
   if (u.kind === 'skel') Snd.play('bones', u.x, u.y);
   if (u.kind === 'zombie') {
     const bo = gain('bones', LV.bone(G.L) * F.boneMult() * (u.big ? 5 : 1));
@@ -1608,7 +1709,7 @@ function shoot(h, t) {
     h.burst--;
     h.cd = h.burst > 0 ? 0.1 : h.rate * rand(0.85, 1.15);
   } else h.cd = h.rate * rand(0.85, 1.15);
-  const hit = Math.random() < (h.kind === 'swat' ? 0.85 : 0.8);
+  const hit = Math.random() < (h.kind === 'swat' ? 0.85 : 0.8) * (evOn('blackout') ? 0.45 : 1);
   const ty0 = t.y - (t.big ? 8 : 5);
   const tx = t.x + (hit ? 0 : rand(-7, 7)), ty = ty0 + (hit ? 0 : rand(-7, 7));
   G.tracers.push({ x1: Math.round(h.x + h.dir * 5), y1: Math.round(h.y - 5), x2: Math.round(tx), y2: Math.round(ty), life: 0.07 });
@@ -1628,8 +1729,9 @@ function punch(h, t) {
 function updUndead(u, dt) {
   if (u.flash > 0) u.flash -= dt;
   if (u.rise > 0) { u.rise -= dt; return; }
+  if (u.strain === 'preta') return updPreta(u, dt);
   if (u.kind === 'zombie') {
-    u.hp -= u.maxHp * F.decay() * dt * (u.big ? 0.5 : 1);
+    u.hp -= u.maxHp * F.decay() * dt * (evOn('blackout') ? 0.4 : 1) * (u.big ? 0.5 : 1);
     if (G.weather === 'hot' && !u.space) { // scorching sun burns rotten flesh outdoors
       u.hp -= u.maxHp * 0.008 * dt;
       if (Math.random() < dt * 1.5) G.parts.push({ x: u.x + rand(-2, 2), y: u.y - rand(6, 10), vx: rand(-3, 3), vy: rand(-14, -8), gy: u.y - 18, col: pick(['#8a8a8a', '#6a6a6a', '#b0b0a0']), stain: false });
@@ -1643,7 +1745,8 @@ function updUndead(u, dt) {
   }
   const fr = G.frenzyT > 0 && u.kind === 'zombie' ? 1.6 : 1;
   // movement multiplier: frenzy, and cold stiffens zombies (skeletons don't mind), floodwater slows everyone
-  const mv = fr * (G.weather === 'cold' && u.kind === 'zombie' ? 0.65 : 1) * (G.weather === 'flood' && !u.space ? 0.85 : 1);
+  // frenzy: attacks x1.6 but running only x1.35, and total speed stops at 30 (44 for dogs) so a maxed 'legs' upgrade doesn't turn into a blur
+  const mv = Math.min(fr > 1 ? 1.35 : 1, Math.max(1, (u.strain === 'dog' ? 44 : 30) / u.spd)) * (G.weather === 'cold' && u.kind === 'zombie' ? 0.65 : 1) * (G.weather === 'flood' && !u.space ? 0.85 : 1);
   u.cd -= dt * fr; u.think -= dt;
   let t = u.target;
   if (t && (t.dead || t.state !== 'ok')) t = u.target = null;
@@ -1678,6 +1781,59 @@ function updUndead(u, dt) {
   }
 }
 // ---------- strain abilities -----------------------------------------------
+// ผีเปรต: drifts straight through walls, drains everyone in its aura, howls to freeze the crowd
+function pretaPrey(u) {
+  let best = null, bd = Infinity;
+  for (const h of G.humans) {
+    if (h.state !== 'ok') continue;
+    const d = (h.x - u.x) ** 2 + (h.y - u.y) ** 2 - (h.kind === 'civ' ? 0 : 400); // gunmen first, they shoot it
+    if (d < bd) { bd = d; best = h; }
+  }
+  return best;
+}
+function updPreta(u, dt) {
+  const fr = G.frenzyT > 0 ? 1.25 : 1, R = pretaR(Math.max(1, U('preta')) - 1);
+  u.think -= dt;
+  let t = u.target;
+  if (!t || t.dead || t.state !== 'ok' || u.think <= 0) { u.think = rand(0.4, 0.7); t = u.target = pretaPrey(u); }
+  if (t) {
+    const dx = t.x - u.x, dy = t.y - u.y, d = Math.hypot(dx, dy) || 1;
+    if (d > 4) {
+      const st = Math.min(u.spd * fr * dt, d);
+      u.x = clamp(u.x + (dx / d) * st, 4, WW - 4); u.y = clamp(u.y + (dy / d) * st, 12, WH - 3);
+      u.anim += st * 0.3; u.dir = dx >= 0 ? 1 : -1;
+    }
+  }
+  u.lastAct = G.time;
+  // hunger aura: drain everyone close, heal from it, turn the dead into zombies
+  let fed = 0;
+  for (const h of G.humans) {
+    if (h.state !== 'ok') continue;
+    const dx = h.x - u.x, dy = h.y - u.y;
+    if (dx * dx + dy * dy > R * R) continue;
+    const dmg = u.dmg * 0.9 * dt * (h.kind === 'boss' ? 0.35 : 1) * h.armor;
+    h.hp -= dmg; fed += dmg;
+    h.threat = u; h.fearT = 2; h.flash = Math.max(h.flash, 0.04);
+    if (Math.random() < dt * 5) G.parts.push({ x: h.x, y: h.y - 5, vx: (u.x - h.x) * 1.6, vy: (u.y - 8 - h.y) * 1.6, gy: u.y - 6, col: pick(['#c9a8ff', '#e8dcff', '#8a6ad0']), stain: false });
+    if (h.hp <= 0) { if (h.kind === 'boss') killBoss(h); else { Snd.play('scream', h.x, h.y, h.voice * 0.9); infectHuman(h); } }
+  }
+  if (fed > 0) u.hp = Math.min(u.maxHp, u.hp + fed * 0.5);
+  // howl: everyone nearby freezes in terror, gunmen drop their aim
+  u.howlT -= dt;
+  if (u.howlT <= 0 && t) {
+    u.howlT = 14;
+    let n = 0;
+    for (const h of G.humans) {
+      if (h.state !== 'ok' || h.kind === 'boss' || Math.hypot(h.x - u.x, h.y - u.y) > 80) continue;
+      h.shockT = Math.max(h.shockT, 1.6); h.alerted = true; h.alertT = 1.4; h.fearT = 3; h.cd = Math.max(h.cd, 1.6); h.throwT = 0; n++;
+    }
+    G.booms.push({ x: u.x, y: u.y - 6, r: 40, life: 0.6, max: 0.6, rage: true });
+    G.shake = Math.max(G.shake, 0.3);
+    Snd.play('roar', u.x, u.y);
+    if (n && inView(u.x, u.y)) float(u.x, u.y - 22, 'โหยหวน!', '#c9a8ff');
+  }
+  if (Math.random() < dt * 8) G.parts.push({ x: u.x + rand(-4, 4), y: u.y - rand(2, 14), vx: rand(-3, 3), vy: rand(-14, -6), gy: u.y - 22, col: pick(['#d8e8ff', '#b48cff', '#ffffff']), stain: false });
+}
 function spitAt(u, t) {
   G.spits.push({ x: u.x + u.dir * 3, y: u.y - 6, t, life: 1.5, from: u, dmg: u.dmg });
   Snd.play('spit', u.x, u.y);
@@ -1805,7 +1961,8 @@ function updHuman(h, dt) {
   if (thinking) {
     h.think = rand(0.2, 0.35);
     const t = nearestUndead(h, h.sight * (evOn('blackout') ? 0.35 : 1)); // pitch dark: they only notice what's right next to them
-    if (t) h.threat = t;
+    if (t && h.dance && evOn('concert') && !h.hurt && Math.hypot(t.x - h.x, t.y - h.y) > 12) h.threat = null; // lost in the music
+    else if (t) h.threat = t;
     else if (h.fearT <= 0) h.threat = null;
   }
   if (h.threat && h.threat.dead) h.threat = null;
@@ -2326,6 +2483,10 @@ function updVans(dt) {
 const curStrain = () => (strainUnlocked(S.settings.strain) ? S.settings.strain : 'basic');
 function spawnZombieAt(x, y, free, strain = 'basic') {
   if (G.undead.length >= 600) return false;
+  if (strain === 'preta') { // only one hungry ghost may walk the city at a time
+    if (G.undead.some((u) => u.strain === 'preta' && !u.dead)) { toast('ผีเปรตมีได้ตัวเดียวในสนาม'); return false; }
+    if (G.pretaCd > 0) { toast(`ผีเปรตกำลังรวบรวมวิญญาณ อีก ${Math.ceil(G.pretaCd)} วิ`); return false; }
+  }
   if (!free) G.energy -= strainCost(strain);
   const z = makeZombie(x, y, null, 'civ', strain);
   G.undead.push(z);
@@ -2339,7 +2500,7 @@ function spawnZombieAt(x, y, free, strain = 'basic') {
 function playerSpawn(x, y) {
   if (G.cleared) return;
   if (x < 0 || y < 0 || x > WW || y > WH) return;
-  const s = curStrain(), c = strainCost(s), n = S.settings.spawnN || 1;
+  const s = curStrain(), c = strainCost(s), n = s === 'preta' ? 1 : S.settings.spawnN || 1;
   if (G.energy < c) { UI.energyFlash = 0.4; return; }
   const base = findFree(x, y);
   if (!base) return;
@@ -2357,7 +2518,7 @@ function playerSpawn(x, y) {
 // spend ALL energy at once — each zombie claws out next to a different random victim, spread over the city
 function spawnAll() {
   if (!G || G.cleared) return;
-  const s = curStrain(), c = strainCost(s), n = Math.floor(G.energy / c);
+  const s = curStrain(), c = strainCost(s), n = s === 'preta' ? Math.min(1, Math.floor(G.energy / c)) : Math.floor(G.energy / c);
   if (!n) { UI.energyFlash = 0.4; return; }
   let made = 0;
   for (let i = 0; i < n; i++) if (spawnNearHuman(false, s)) made++;
@@ -2442,20 +2603,34 @@ function startEvent(k) {
     for (const h of G.humans) {
       if (h.state !== 'ok' || h.kind !== 'civ' || h.hurt || h.alerted || h.rich || Math.random() > 0.75) continue;
       const q = findFree(p.x + rand(-28, 28), p.y + rand(-18, 18));
-      if (q) { h.goal = { x: q.x, y: q.y, space: null }; h.goalT = 30; h.watch = true; }
+      if (q) { h.goal = { x: q.x, y: q.y, space: null }; h.goalT = 30; h.watch = true; h.bounty = 2; }
+    }
+    const extra = Math.min(30, 6 + Math.floor(G.L / 3)); // out-of-towners flood in for the fireworks
+    for (let i = 0; i < extra; i++) {
+      const q = findFree(p.x + rand(-30, 30), p.y + rand(-20, 20));
+      if (!q) continue;
+      const h = makeHuman('civ', q.x, q.y);
+      h.watch = true; h.bounty = 2;
+      G.humans.push(h); G.total++; G.total0++;
     }
   } else if (k === 'concert') { // a mor lam stage pops up and a crowd gathers to dance
     const p = plazaPoint(); e.x = p.x; e.y = p.y;
-    const n = Math.min(40, 8 + Math.floor(G.L / 3));
+    const n = Math.min(70, 14 + Math.floor(G.L / 2));
     for (let i = 0; i < n; i++) {
-      const q = findFree(p.x + rand(-22, 22), p.y + rand(6, 22));
+      const q = findFree(p.x + rand(-26, 26), p.y + rand(6, 26));
       if (!q) continue;
       const h = makeHuman('civ', q.x, q.y);
-      h.dance = true; h.dir = -1; h.anim = rand(0, 2);
+      h.dance = true; h.dir = -1; h.anim = rand(0, 2); h.bounty = 2;
       G.humans.push(h); G.total++; G.total0++;
     }
   } else if (k === 'army') {
-    sendVan('soldier');
+    sendVan('soldier'); sendVan('soldier');
+  } else if (k === 'horde') { // the graveyard coughs up a free army
+    const n = 8 + Math.floor(G.L * 0.8);
+    for (let i = 0; i < n; i++) spawnNearHuman(true);
+    G.shake = Math.max(G.shake, 0.6);
+  } else if (k === 'outbreak') {
+    for (const h of G.humans) if (h.state === 'ok' && h.kind !== 'boss' && Math.random() < 0.85) h.sick = true;
   } else if (k === 'airdrop') { // a supply crate parachutes in — zombies race the gunmen for it
     const p = randomFree(true);
     e.crate = { x: p.x, y: p.y, drop: 2 };
@@ -2467,20 +2642,21 @@ function startEvent(k) {
 function endEvent() {
   const e = G.ev;
   if (!e) return;
-  for (const h of G.humans) { h.watch = false; h.dance = false; }
+  for (const h of G.humans) { h.watch = false; h.dance = false; h.sick = false; }
   if (e.k === 'airdrop' && e.crate && !e.claimed && !G.cleared) toast('กล่องเสบียงถูกทิ้งไว้จนพังเสียหาย');
   G.ev = null;
-  G.evT = rand(35, 60);
+  G.evT = rand(28, 48);
   UI.evDirty = true;
 }
 function claimCrate(byUndead) {
   const e = G.ev, c = e.crate;
   e.claimed = true;
   if (byUndead) {
-    const br = gain('brains', LV.clearBrains(G.L) * 0.6 * F.brainMult()), bo = gain('bones', LV.clearBones(G.L) * 0.6 * F.boneMult());
+    const br = gain('brains', LV.clearBrains(G.L) * 2.5 * F.brainMult()), bo = gain('bones', LV.clearBones(G.L) * 2.5 * F.boneMult());
     G.energy = F.eMax();
+    for (let i = 0; i < 4 + Math.floor(G.L / 5); i++) { const q = findFree(c.x + rand(-14, 14), c.y + rand(-10, 10)); if (q) spawnZombieAt(q.x, q.y, true); }
     float(c.x, c.y - 12, '+' + fmt(br), '#f08cb8'); float(c.x, c.y - 18, '+' + fmt(bo), '#eadfc4');
-    toast('ซอมบี้ชิงกล่องเสบียงได้! สมอง + กระดูก + พลังงานเต็ม');
+    toast('ซอมบี้ชิงกล่องเสบียงได้! สมอง + กระดูกก้อนโต + พลังงานเต็ม + ซอมบี้ฟรี');
     Snd.play('clear');
   } else { // the living patch themselves up
     for (const h of G.humans) if (h.state === 'ok' && Math.hypot(h.x - c.x, h.y - c.y) < 60) { h.hp = h.maxHp; h.hurt = false; }
@@ -2500,8 +2676,8 @@ function updEvents(dt) {
   if (G.cleared) return;
   const e = G.ev;
   if (!e) {
-    if (G.L < 3 || G.evN >= 3 || (G.evT -= dt) > 0) return;
-    G.evT = rand(40, 65);
+    if (G.L < 3 || G.evN >= 4 || (G.evT -= dt) > 0) return;
+    G.evT = rand(30, 50);
     let alive = 0;
     for (const h of G.humans) if (h.state === 'ok') alive++;
     if (alive < 8) return;
@@ -2517,6 +2693,8 @@ function updEvents(dt) {
       if (Math.random() < 0.5) G.fw.push({ x: e.x + rand(-30, 30), y: e.y - 4, vx: rand(-2, 2), vy: -9, life: 6, col: '#ff9a2a', lan: true });
       Snd.play('firework', x, e.y);
     }
+  } else if (e.k === 'outbreak') {
+    if (Math.random() < dt * 6) { const h = pick(G.humans); if (h && h.sick && h.state === 'ok' && inView(h.x, h.y)) G.parts.push({ x: h.x, y: h.y - 8, vx: rand(-6, 6), vy: rand(-14, -6), gy: h.y - 2, col: pick(['#b8d04a', '#dcd65a', '#8cff3a']), stain: false }); }
   } else if (e.k === 'concert') {
     if (Math.random() < dt * 3) G.parts.push({ x: e.x + rand(-12, 12), y: e.y - 12, vx: rand(-6, 6), vy: -16, gy: e.y - 34, col: pick(['#ffd23a', '#ff8ab0', '#5ad0ff']), stain: false });
     if (Math.random() < dt * 1.2) Snd.play('drum', e.x, e.y);
@@ -2541,8 +2719,8 @@ function clearLevel() {
   const br = gain('brains', LV.clearBrains(L) * F.brainMult() * (R.clear || 1)), bo = gain('bones', LV.clearBones(L) * F.boneMult());
   S.stats.cleared++;
   S.maxLevel = Math.max(S.maxLevel, L + 1);
-  // clearing the frontier level → the route map offers a choice of districts for the next one
-  const fresh = L + 1 === S.maxLevel && L + 1 >= 3 && !S.routes[L + 1];
+  // every clear offers a fresh choice of districts for the next level (the pick is remembered for prev/next/replay)
+  const fresh = L + 1 >= 3;
   S.stats.bestLevel = Math.max(S.stats.bestLevel, S.maxLevel);
   targeting = null;
   if (G.ev) endEvent();
@@ -2552,9 +2730,10 @@ function clearLevel() {
   const nextTxt = S.settings.autoNext ? (G.choices ? 'สุ่มเลือกเส้นทางให้' : 'ไปด่านถัดไป') : 'เริ่มด่านเดิมอีกครั้ง';
   const grow = worldSize(L + 1).k > worldSize(L).k ? '<div class="bgrow">ด่านถัดไปแมพจะกว้างขึ้น!</div>' : '';
   const boss = isBossLevel(L + 1) ? '<div class="bgrow">ด่านถัดไปมีบอส!</div>' : '';
-  const cards = G.choices ? `<div class="rtitle">เลือกเส้นทางบุกด่าน ${L + 1}</div><div class="routes">${G.choices.map((id) => {
+  const chip = (t, c) => `<i class="${c}">${t}</i>`;
+  const cards = G.choices ? `<div class="rtitle">เลือกเส้นทางบุกด่าน ${L + 1}<small>ยิ่งเสี่ยง ยิ่งได้เยอะ · เลือกได้ใหม่ทุกครั้งที่ผ่านด่าน</small></div><div class="routes">${G.choices.map((id) => {
     const r = ROUTES[id];
-    return `<button class="route" data-r="${id}"><img src="${Pix.icon(r.icon)}" alt=""><b>${r.name}</b><span>${r.desc}</span></button>`;
+    return `<button class="route" data-r="${id}"><img src="${Pix.icon(r.icon)}" alt=""><b>${r.name}</b><div class="rchips">${r.pro.map((t) => chip(t, 'pro')).join('')}${r.con.map((t) => chip(t, 'con')).join('')}</div></button>`;
   }).join('')}</div>` : '';
   showBanner(`
     <div class="bt">ด่าน ${L} ผ่านแล้ว!</div>
@@ -2609,6 +2788,7 @@ function update(dt) {
   S.stats.play += dt;
   G.energy = Math.min(F.eMax(), G.energy + F.eRegen() * dt);
   for (const k in CD) if (k !== 'frenzy' || G.frenzyT <= 0) CD[k] = Math.max(0, CD[k] - dt);
+  if (G.pretaCd > 0) G.pretaCd -= dt;
   if (G.frenzyT > 0) G.frenzyT -= dt;
   for (let i = G.skelQ.length - 1; i >= 0; i--) {
     G.skelQ[i] -= dt;
@@ -2620,7 +2800,7 @@ function update(dt) {
   for (const h of G.humans) if (h.space) h.space.nIn++;
 
   if (!G.cleared) {
-    const st = curStrain();
+    const st = curStrain() === 'preta' ? 'basic' : curStrain(); // auto-place never wastes the one-of-a-kind ghost
     if (U('auto') && S.settings.autoSpawn !== false && G.energy >= F.eMax() - 0.01 && G.energy >= strainCost(st)) {
       if (spawnNearHuman(false, st) === false) G.energy = F.eMax() * 0.99;
     }
@@ -2812,7 +2992,14 @@ function drawEnt(e) {
     const fl = Math.floor(G.time * (10 + (0.75 - e.fuse) * 30)) % 2;
     sprite = fl ? (right ? set.rr[f] : set.rl[f]) : (right ? set.wr[f] : set.wl[f]);
   }
-  const wet = G.weather === 'flood' && !e.space; // wading: hide the feet under the water line
+  const ghost = e.strain === 'preta';
+  if (ghost) { // hovering, see-through, with the hunger aura ringed on the ground
+    const R = pretaR(Math.max(1, U('preta')) - 1), k = 0.94 + 0.06 * Math.sin(G.time * 3);
+    ctx.globalAlpha = 0.3; ring(fx, fy, R * k, '#c9a8ff'); ring(fx, fy, R * k * 0.62, '#8a6ad0');
+    ctx.globalAlpha = 0.72 + 0.14 * Math.sin(G.time * 3 + e.x);
+    dy -= 3 + Math.round(Math.sin(G.time * 2.4));
+  }
+  const wet = G.weather === 'flood' && !e.space && !ghost; // wading: hide the feet under the water line
   ctx.fillStyle = 'rgba(0,0,0,.28)'; if (!wet) ctx.fillRect(fx - Math.round(sp.w / 3), fy, Math.round(sp.w / 1.6), 1);
   if (wet) { ctx.save(); ctx.beginPath(); ctx.rect(dx - 3, dy - 4, sp.w + 6, sp.h + 2); ctx.clip(); }
   if (rage) { // blood-red glow around every frenzied zombie
@@ -2822,6 +3009,7 @@ function drawEnt(e) {
     ctx.globalAlpha = 1;
   }
   ctx.drawImage(sprite, dx, dy);
+  if (ghost) ctx.globalAlpha = 1;
   if (rage && Math.floor(G.time * 6 + e.x) % 3 === 0) { px(dx + (right ? sp.w - 4 : 3), dy + 2, '#ffff60'); } // glowing eyes
   if (wet) {
     ctx.restore();
@@ -3393,7 +3581,7 @@ const ACH = [
   { id: 'g1', name: 'ยักษ์ตื่น', desc: 'ได้ซอมบี้ยักษ์ตัวแรก', v: st('giants'), n: 1 },
   { id: 'sp50', name: 'กรดกัดกร่อน', desc: 'ฆ่าด้วยกรดของซอมบี้ถ่มกรด 50 ครั้ง', v: st('spitKills'), n: 50 },
   { id: 'bd10', name: 'บึ้ม!', desc: 'ซอมบี้บึ้มพลีชีพพังประตู 10 บาน', v: st('bombDoors'), n: 10 },
-  { id: 'st3', name: 'นักพันธุกรรม', desc: 'ปลดล็อกซอมบี้ครบทุกสายพันธุ์', v: () => ['spit', 'bomb', 'tank'].filter((s) => U(s) > 0).length, n: 3 },
+  { id: 'st3', name: 'นักพันธุกรรม', desc: 'ปลดล็อกซอมบี้ครบทุกสายพันธุ์ (รวมผีเปรต)', v: () => ['spit', 'bomb', 'tank', 'preta'].filter((s) => U(s) > 0).length, n: 4 },
   { id: 'u200', name: 'ทะเลศพ', desc: 'มีอันเดดในแมพพร้อมกัน 200 ตัว', v: st('maxUndead'), n: 200 },
   { id: 'pr1', name: 'เกิดใหม่', desc: 'เกิดใหม่ครั้งแรก', v: st('prestiges'), n: 1 },
   { id: 'pr5', name: 'วัฏจักรแห่งความตาย', desc: 'เกิดใหม่ 5 ครั้ง', v: st('prestiges'), n: 5 },
@@ -3604,7 +3792,7 @@ function buy(d) {
   const l = lvlOf(d);
   setLvl(d, l + plan.n);
   Snd.init(); Snd.play('buy');
-  if (['bite', 'flesh', 'legs', 'skelPower', 'spit', 'bomb', 'tank', 'pZombie'].includes(d.id)) refreshUndeadStats();
+  if (['bite', 'flesh', 'legs', 'skelPower', 'spit', 'bomb', 'tank', 'preta', 'pZombie'].includes(d.id)) refreshUndeadStats();
   if (d.id === 'graveyard' && !G.cleared) for (let i = 0; i < plan.n; i++) spawnSkel(i * 0.15);
   if (d.id === 'pSkel' && !G.cleared) for (let i = 0; i < plan.n * 2; i++) spawnSkel(i * 0.15);
   if (d.id === 'auto') { toast('ซอมบี้จะถูกวางอัตโนมัติเมื่อพลังงานเต็ม! (ปิดได้ที่ปุ่ม AUTO)'); syncSpawnCtl(); }
@@ -3751,7 +3939,7 @@ function buildSystem(list) {
         <li>ชี้เมาส์ที่บ้านเพื่อมองเข้าไปข้างใน</li>
         <li>มือถือ: <b>แตะ</b> = วางซอมบี้ · <b>ลากนิ้ว</b> = เลื่อน · <b>สองนิ้ว</b> = ซูม</li>
         <li><b>1 / 2 / 3</b> — ร่ายเวท · <b>Esc</b> — ยกเลิกการเล็ง</li>
-        <li><b>Z / X / C / V</b> — เลือกสายพันธุ์ซอมบี้: ธรรมดา / ถ่มกรด / บึ้มพลีชีพ / ถังเลือด</li>
+        <li><b>Z / X / C / V / B</b> — เลือกสายพันธุ์ซอมบี้: ธรรมดา / ถ่มกรด / บึ้มพลีชีพ / ถังเลือด / ผีเปรต</li>
       </ul>
       <h3>ศัตรู</h3>
       <ul class="howto">
@@ -3769,8 +3957,10 @@ function buildSystem(list) {
       </ul>
       <h3>เส้นทาง & อีเวนต์</h3>
       <ul class="howto">
-        <li><b>แผนที่เลือกเส้นทาง</b> — ผ่านด่านใหม่ครั้งแรก (ตั้งแต่ด่าน 3) ได้เลือก 1 ใน 3 ย่านที่จะบุกต่อ เช่น ตลาดนัด (คนเยอะ) · หมู่บ้านไฮโซ (คฤหาสน์เพียบ) · ใกล้สถานีตำรวจ (อันตรายแต่สมอง/กระดูก x2) · ริมเจ้าพระยา (น้ำท่วมแต่รางวัล x1.5) — ถ้าไม่เลือกภายในเวลา ระบบสุ่มให้</li>
-        <li><b>อีเวนต์สุ่มกลางด่าน</b> (ด่าน 3+): ลอยกระทง (คนออกจากบ้านมาดูพลุ) · จันทร์สีเลือด (เลือด x3) · คอนเสิร์ตหมอลำ (ฝูงชนมาเต้น) · ไฟดับ (คนมองไม่เห็นซอมบี้) · ด่านตรวจทหาร (ทหารค่าหัว x3) · เสบียงตกจากฟ้า (แย่งกล่องกับคนถือปืน)</li>
+        <li><b>แผนที่เลือกเส้นทาง</b> — ทุกครั้งที่ผ่านด่าน (ตั้งแต่ด่าน 3) ได้เลือก 1 ใน 3 ย่านที่จะบุกต่อ สุ่มชุดใหม่ทุกครั้ง · ป้ายเขียว = ข้อดี ป้ายแดง = ข้อเสีย · ย่านที่เลือกจะถูกจำไว้ตอนกดเล่นซ้ำหรือย้อนด่าน ส่วนตำแหน่งคนสุ่มใหม่ทุกครั้ง · ถ้าไม่เลือกภายในเวลา ระบบสุ่มให้</li>
+        <li><b>อีเวนต์สุ่มกลางด่าน</b> (ด่าน 3+ สูงสุด 4 ครั้ง/ด่าน): ลอยกระทง (ฝูงชนแห่มาดูพลุ คนละ x2) · จันทร์สีเลือด (เลือด x3 ซอมบี้กัดแรงและดูดเลือด) · คอนเสิร์ตหมอลำ (ฝูงชนเยอะมากไม่สนซอมบี้ คนละ x2) · ไฟดับ (คนมองไม่เห็นและยิงพลาด) · ด่านตรวจทหาร (รถทหาร 2 คัน ค่าหัว x3) · เสบียงตกจากฟ้า (แย่งกล่องกับคนถือปืน ได้ซอมบี้ฟรีด้วย) · ฝูงศพตื่น (ซอมบี้ฟรีผุดทั้งเมือง) · ไข้หวัดระบาด (มนุษย์เดินช้าลง 40%)</li>
+        <li><b>กำแพงและรั้ว</b> — เมืองล้อมด้วยกำแพง แต่ละย่านมีรั้วตามสไตล์ (เหล็กดัด · กำแพงแดงเยาวราช · กำแพงเมืองเก่า · รั้วไม้) และคฤหาสน์มีกำแพงล้อมรอบ เข้าออกได้ทางประตูรั้วเท่านั้น</li>
+        <li><b>ผีเปรต</b> — ซอมบี้พิเศษ มีได้ตัวเดียวในสนาม ลอยทะลุกำแพง ดูดชีวิตคนรอบตัว และร้องโหยหวนให้คนช็อกค้าง (ปลดล็อกในแท็บซอมบี้ ราคากระดูก)</li>
         <li>พิมพ์เลขด่านในช่อง <b>ด่าน</b> ด้านบนแผนที่ แล้วกด Enter เพื่อกลับไปเล่นด่านที่เคยผ่าน</li>
       </ul>
       <h3>สถิติ</h3>
@@ -3895,7 +4085,7 @@ function uiFrame(dt) {
     $('lvlMax').textContent = '/' + S.maxLevel;
     const R = G.route, th = $('lvlTheme');
     th.innerHTML = (isBossLevel(S.level) ? '<b>BOSS</b> · ' : '') + MAP.th.name + (R !== ROUTES.normal ? ` · <b>${R.name}</b>` : '');
-    th.title = R !== ROUTES.normal ? `${R.name}: ${R.desc}` : `แมพ ${WW}×${WH}`;
+    th.title = R !== ROUTES.normal ? `${R.name}: ${[...R.pro, ...R.con].join(' · ')}` : `แมพ ${WW}×${WH}`;
     const wx = WEATHER[G.weather], el = $('wx');
     el.querySelector('img').src = Pix.icon(wx.icon);
     el.querySelector('span').textContent = wx.name;
@@ -4145,6 +4335,6 @@ new ResizeObserver(resize).observe(canvas);
 if (!S.tutorial) $('tip').classList.add('hidden');
 if (hadSave) applyOffline((Date.now() - S.t) / 1000);
 // debug handle (console): ZR.step(seconds) fast-forwards the simulation
-window.ZR = { get S() { return S; }, get G() { return G; }, get MAP() { return MAP; }, cam, goLevel, save, step: (sec) => { for (let t = 0; t < sec; t += 1 / 30) update(1 / 30); }, render: () => { draw(0); uiFrame(0.2); }, event: (k) => startEvent(k), boss: (k) => spawnBoss(k), defs: [...UPG, ...SPELLS], buy: (d) => buy(d) };
+window.ZR = { get S() { return S; }, get G() { return G; }, get MAP() { return MAP; }, cam, goLevel, save, step: (sec) => { for (let t = 0; t < sec; t += 1 / 30) update(1 / 30); }, render: () => { draw(0); uiFrame(0.2); }, event: (k) => startEvent(k), boss: (k) => spawnBoss(k), defs: [...UPG, ...SPELLS], buy: (d) => buy(d), spawn: (x, y, st) => spawnZombieAt(x, y, true, st) };
 requestAnimationFrame(frame);
 })();
