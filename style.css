@@ -226,21 +226,27 @@ main {
 #evPill .evbar { position: absolute; left: 3px; right: 3px; bottom: 2px; height: 2px; background: #1a0e20; }
 #evPill .evbar i { display: block; height: 100%; width: 100%; background: #c080ff; }
 #evPill.ev-bloodmoon { box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #ff4040; } #evPill.ev-bloodmoon b { color: #ff7a6a; }
+#evPill.ev-horde { box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #8fe04a; } #evPill.ev-horde b { color: #b0f070; }
+#evPill.ev-outbreak { box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #c8d04a; } #evPill.ev-outbreak b { color: #dcd65a; }
 #evPill.ev-blackout { box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #6a6a8a; }
 #evPill.ev-airdrop { box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #f0c830; } #evPill.ev-airdrop b { color: #ffd84a; }
-/* route map (district choice after clearing a new level) */
-.rtitle { margin: 12px 0 8px; font-size: 15px; color: #ffc861; font-weight: 500; }
-.routes { display: grid; grid-template-columns: repeat(3, minmax(0, 170px)); gap: 10px; justify-content: center; }
+/* route map (district choice after clearing a level) */
+.rtitle { margin: 14px 0 10px; font-size: 16px; color: #ffc861; font-weight: 500; }
+.rtitle small { display: block; font-size: 11.5px; color: var(--dim); font-weight: 400; margin-top: 2px; }
+.routes { display: grid; grid-template-columns: repeat(3, minmax(0, 184px)); gap: 10px; justify-content: center; }
 .route {
-  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px; cursor: pointer;
-  font-family: 'Mitr', sans-serif; color: var(--ink); background: var(--panel2); border: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px 10px; cursor: pointer;
+  font-family: 'Mitr', sans-serif; color: var(--ink); background: linear-gradient(#2a2032, #1c1422); border: 0;
   box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #4a3854, inset -2px -2px 0 rgba(0,0,0,.45);
   transition: transform .08s, box-shadow .1s;
 }
-.route:hover { transform: translateY(-2px); box-shadow: 0 0 0 2px #000, inset 0 0 0 2px var(--toxic); background: #2a3a22; }
-.route img { width: 32px; height: 32px; }
+.route:hover { transform: translateY(-3px); box-shadow: 0 0 0 2px #000, inset 0 0 0 2px var(--toxic), 0 6px 14px rgba(0,0,0,.5); background: linear-gradient(#34482a, #22301c); }
+.route > img { width: 40px; height: 40px; padding: 6px; background: #120c16; box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #4a3854; }
 .route b { font-size: 14px; font-weight: 500; }
-.route span { font-size: 11.5px; color: var(--dim); line-height: 1.35; }
+.rchips { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+.rchips i { font-style: normal; font-size: 11px; line-height: 1.2; padding: 2px 6px; border-radius: 2px; }
+.rchips .pro { background: #17351c; color: #8ff08a; box-shadow: inset 0 0 0 1px #2f6a34; }
+.rchips .con { background: #3a1a1a; color: #ff9a8a; box-shadow: inset 0 0 0 1px #7a2e2e; }
 
 #banner {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -302,7 +308,7 @@ main {
 #wx.w-flood { color: #8ac8ff; box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #2a6ab0; }
 
 /* strain picker */
-#strains { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+#strains { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 8px; margin-top: 10px; }
 .strain {
   position: relative; display: flex; align-items: center; gap: 6px; padding: 6px 8px;
   font-family: 'Mitr', sans-serif; font-size: 13px; color: var(--ink); text-align: left;
