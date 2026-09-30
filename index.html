@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZOMBIE PHEE DIP — ผีดิบครองเมือง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Mitr:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=15">
+</head>
+<body>
+<div id="app">
+  <header id="top" class="px-box">
+    <div class="brand">
+      <img data-icon="skull" alt="" class="brand-ico">
+      <div>
+        <div class="logo">ZOMBIE PHEE DIP</div>
+        <div class="sub">เกมไอเดิลเนโครแมนเซอร์</div>
+      </div>
+    </div>
+    <div class="hint">คลิกซ้าย = วางซอมบี้ · คลิกขวาลาก = เลื่อนแมพ · ล้อเมาส์ = ซูม</div>
+  </header>
+
+  <main>
+    <section id="left">
+      <div id="stage">
+        <canvas id="game"></canvas>
+        <div id="hud">
+          <div class="hr blood" id="hBlood" title="เลือด — ได้จากการฆ่ามนุษย์">
+            <img data-icon="blood" alt=""><div class="hv"><b id="rBlood">0</b><span>/ <i id="cBlood">0</i></span><div class="hb"><i id="fBlood"></i></div></div>
+          </div>
+          <div class="hr brains" id="hBrains" title="สมอง — ได้จากศพที่ลุกขึ้นและการผ่านด่าน">
+            <img data-icon="brain" alt=""><div class="hv"><b id="rBrains">0</b><span>/ <i id="cBrains">0</i></span><div class="hb"><i id="fBrains"></i></div></div>
+          </div>
+          <div class="hr bones" id="hBones" title="กระดูก — ได้จากซอมบี้ที่ตาย">
+            <img data-icon="bone" alt=""><div class="hv"><b id="rBones">0</b><span>/ <i id="cBones">0</i></span><div class="hb"><i id="fBones"></i></div></div>
+          </div>
+          <div class="hr counts" title="มนุษย์ที่เหลือ · หลบอยู่ในบ้าน · กองทัพอันเดด">
+            <span><img data-icon="human" alt=""><b id="cHumans">0</b></span>
+            <span><img data-icon="house" alt=""><b id="cInside">0</b></span>
+            <span><img data-icon="skull" alt=""><b id="cUndead">0</b></span>
+          </div>
+        </div>
+        <div id="zoomCtl">
+          <button id="zIn" title="ซูมเข้า (+)">+</button>
+          <button id="zOut" title="ซูมออก (−)">−</button>
+          <button id="zFit" title="ดูทั้งแมพ (0)">⤢</button>
+          <button id="zRoof" title="มองทะลุหลังคา"><img data-icon="house" alt=""></button>
+          <button id="speedBtn" title="ความเร็วเกม">x1</button>
+        </div>
+        <canvas id="mini" width="192" height="108" title="มินิแมพ — คลิกเพื่อเลื่อนกล้อง"></canvas>
+        <div id="topc">
+          <div id="levelbar">
+            <button id="prevLvl" title="ด่านก่อนหน้า">◀</button>
+            <label class="lvl" title="พิมพ์เลขด่านที่เคยผ่านแล้วกด Enter เพื่อไปด่านนั้น">ด่าน<input id="lvlIn" type="number" min="1" step="1" inputmode="numeric" autocomplete="off"><span id="lvlMax">/1</span></label>
+            <button id="nextLvl" title="ด่านถัดไป">▶</button>
+            <span id="lvlTheme"></span>
+            <div id="wx" title=""><img alt=""><span></span></div>
+          </div>
+          <div id="bossbar" class="hidden">
+            <div class="bbtop"><img data-icon="crown" alt=""><b id="bossName"></b><span id="bossHp"></span></div>
+            <div class="bbar"><i id="bossFill"></i></div>
+          </div>
+          <div id="evPill" class="hidden"><img alt=""><div><b></b><span></span></div><i class="evbar"><i></i></i></div>
+          <div id="toast"></div>
+        </div>
+        <div id="bossIntro"></div>
+        <div id="achPop"></div>
+        <div id="tip">คลิกบนพื้นเพื่อวางซอมบี้!</div>
+        <div id="banner" class="hidden"></div>
+      </div>
+
+      <div id="energy">
+        <img data-icon="energy" alt="">
+        <div class="bar"><div id="eFill"></div><span id="eText"></span></div>
+        <div id="spawnCtl">
+          <span class="lbl">ปลุกทีละ</span>
+          <button data-n="1" title="คลิก 1 ครั้ง = ซอมบี้ 1 ตัว">x1</button>
+          <button data-n="2" title="คลิก 1 ครั้ง = ซอมบี้ 2 ตัว (กระจายรอบจุดที่คลิก)">x2</button>
+          <button data-n="3" title="คลิก 1 ครั้ง = ซอมบี้ 3 ตัว (กระจายรอบจุดที่คลิก)">x3</button>
+          <button id="spawnAll" class="all" title="ใช้พลังงานทั้งหมด ปลุกซอมบี้กระจายทั่วเมือง (Q)">ปลุกทั้งหมด</button>
+          <button id="autoBtn" class="hidden" title="เปิด/ปิด เจตจำนงแห่งความตาย (วางอัตโนมัติ)">AUTO</button>
+        </div>
+      </div>
+      <div id="strains"></div>
+      <div id="spells"></div>
+    </section>
+
+    <aside id="panel" class="px-box">
+      <nav id="tabs"></nav>
+      <div id="buymode">
+        <span>ซื้อทีละ</span>
+        <button data-m="1">x1</button><button data-m="10">x10</button><button data-m="max">MAX</button>
+      </div>
+      <div id="list"></div>
+    </aside>
+  </main>
+</div>
+
+<div id="modal" class="hidden">
+  <div class="box px-box">
+    <h2 id="mTitle"></h2>
+    <div id="mBody"></div>
+    <button id="mOk" class="px-btn go">ตกลง</button>
+  </div>
+</div>
+
+<script src="src/sprites.js?v=15"></script>
+<script src="src/game.js?v=15"></script>
+</body>
+</html>
